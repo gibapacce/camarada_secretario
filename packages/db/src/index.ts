@@ -1,0 +1,26 @@
+export {
+  DB_FUNCTIONS,
+  DomainError,
+  PostgrestDbClient,
+  toDomainError,
+  type DbClient,
+  type DbFunction,
+  type PostgrestOptions,
+} from './client.ts';
+export {
+  TASK_VIEWS,
+  createTaskSchema,
+  createTaskService,
+  listTasksSchema,
+  recurrenceSchema,
+  updateTaskSchema,
+  type Task,
+  type TaskDetailsResult,
+  type TaskEvent,
+  type TaskListResult,
+  type TaskPriority,
+  type TaskResult,
+  type TaskService,
+  type TaskStatus,
+  type TaskView,
+} from './tasks.ts';

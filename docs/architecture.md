@@ -40,6 +40,57 @@ Mitigações planejadas:
 - Backup: exportação semanal própria (Fase 9), além de exportação manual documentada.
 - CPU de 10 ms: medir no `wrangler dev` e nos logs; evitar trabalho pesado no Worker.
 
+## Modelo de dados e regras (Fase 2)
+
+Migrations em `supabase/migrations/`; testes rodam as mesmas migrations num Postgres local
+(PGlite, sem Docker). Toda alteração passa por funções SQL transacionais chamadas pelo Worker via
+RPC com a service role. O Postgres de testes é o 18; o código evita recursos exclusivos de versões
+novas para continuar compatível com o Supabase.
+
+- **Isolamento por casa:** toda função recebe `household_id`; chaves estrangeiras compostas impedem
+  ligar tarefa a pessoa ou regra de outra casa. RLS ligado em todas as tabelas, sem políticas
+  (nega tudo a clientes). Funções revogadas de `anon`/`authenticated`.
+- **Membros:** `telegram_user_id` substitui o `whatsapp_number` do plano (decisão D1).
+- **Idempotência:** cada comando aceita `idempotency_key` no formato `provider:id`
+  (ex.: `telegram:<chat>:<message_id>`). A chave fica em `processed_messages` com o resultado;
+  repetir a mesma chave devolve o mesmo resultado com `replayed: true`, sem reprocessar.
+  Concluir algo já concluído também é inofensivo (`task_already_completed`).
+- **Atraso:** nunca é gravado; é calculado (`is_overdue`) quando `due_at < agora` e a tarefa está
+  aberta.
+- **Tarefas de treino:** `is_tutorial = true` ficam fora das consultas por padrão.
+- **Erros:** autorização e entrada inválida geram exceção (nada é gravado). Resultados de negócio
+  voltam como `{ok: false, error}` (ex.: `task_not_found`, `task_cancelled`, `undo_conflict`).
+
+### Recorrência
+
+- A regra guarda frequência (`daily`, `weekly`, `monthly`), intervalo (1 a 12), dias da semana,
+  dia do mês, hora local e data de início. Cada ocorrência é uma tarefa própria, então o histórico
+  das anteriores nunca se perde.
+- Ao **concluir** ou **cancelar** uma ocorrência, nasce a próxima: a primeira data da regra
+  posterior ao prazo da atual **e** ao momento presente. Ocorrências atrasadas não geram um
+  acúmulo de cópias perdidas; a série continua a partir de agora.
+- Mensal no dia 29–31 usa o último dia do mês quando ele não existe (ex.: 31 → 28/02).
+- O horário é calculado no fuso da casa, inclusive com horário de verão (testado com Lisboa).
+  Horários locais inexistentes na troca de horário são ajustados pelo Postgres.
+- Índice único `(regra, prazo)` e bloqueio da regra garantem que retries não dupliquem ocorrências.
+- Cancelar com `stop_recurrence` encerra a série.
+
+### Desfazer
+
+- Reverte a última ação da própria pessoa (criar, editar, concluir, reabrir, cancelar) em até
+  15 minutos (configurável até 60). Pode ser repetido para voltar várias ações.
+- É um evento compensatório `undone` no histórico; nada é apagado. Desfazer uma criação cancela a
+  tarefa (e encerra a série, se recorrente).
+- Se outra pessoa alterou a mesma tarefa depois, o resultado é `undo_conflict` (nada muda).
+- Desfazer uma conclusão recorrente cancela a próxima ocorrência gerada, se ninguém mexeu nela.
+
+### Pendências conhecidas
+
+- Tabelas de fotos, lembretes, log da persona e dicas entram nas fases 4, 6 e 8.
+- A API HTTP de tarefas entra na Fase 3, junto com o login; sem autenticação ela não é exposta.
+- O cliente PostgREST foi testado com `fetch` simulado. O envio de chaves no formato novo
+  (`sb_secret_`) só em `apikey` é [H] e será validado no primeiro teste com o Supabase real.
+
 ## Por que não WhatsApp (por enquanto)
 
 - Groups API exige Official Business Account (verificação de empresa); não concedida a contas de

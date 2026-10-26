@@ -9,6 +9,7 @@
   "workspaces": [
     "packages/shared",
     "packages/persona",
+    "packages/db",
     "apps/web",
     "apps/worker"
   ],

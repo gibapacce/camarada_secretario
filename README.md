@@ -11,13 +11,15 @@ backend valida e executa. A persona é apenas camada de apresentação.
 
 ## Estado atual
 
-| Fase                       | Situação     |
-| -------------------------- | ------------ |
-| 0 Viabilidade e decisões   | ✅ Concluída |
-| 1 Esqueleto e documentação | ✅ Concluída |
-| 2 Banco e regras           | ⏳ Próxima   |
+| Fase                       | Situação                     |
+| -------------------------- | ---------------------------- |
+| 0 Viabilidade e decisões   | ✅ Concluída                 |
+| 1 Esqueleto e documentação | ✅ Concluída                 |
+| 2 Banco e regras           | ✅ Concluída (local, PGlite) |
+| 3 Painel web               | ⏳ Próxima                   |
 
-Nenhum serviço em nuvem foi criado ainda. Tudo roda localmente.
+Nenhum serviço em nuvem foi criado ainda. Tudo roda localmente. As migrations ainda não foram
+aplicadas num Supabase real; isso acontece quando a conta for criada (Fase 3).
 
 ## Estrutura
 
@@ -28,6 +30,10 @@ apps/
 packages/
   shared/     Utilitários e tipos compartilhados (fuso, normalização de texto)
   persona/    Camarada Ho Chi Miau: intensidades, catálogo de mensagens, Modo Aprendiz
+  db/         Cliente do banco (Supabase/PostgREST), validação (zod) e serviço de tarefas
+supabase/
+  migrations/ Esquema e funções SQL transacionais (fonte da verdade)
+  seed.sql    Dados fictícios para desenvolvimento
 docs/         Plano, arquitetura e guias
 .github/      CI (formato, lint, tipos, testes, build)
 ```
