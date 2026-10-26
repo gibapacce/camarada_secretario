@@ -18,8 +18,10 @@ backend valida e executa. A persona é apenas camada de apresentação.
 | 2 Banco e regras           | ✅ Concluída (local, PGlite)                             |
 | 3 Painel web               | 🔧 Em andamento: API autenticada pronta; painel a seguir |
 
-Nenhum serviço em nuvem foi criado ainda. Tudo roda localmente. As migrations ainda não foram
-aplicadas num Supabase real; isso acontece quando a conta for criada (Fase 3).
+O projeto Supabase (plano Free, São Paulo) existe e tem as migrations aplicadas, sem o seed. Cadastro
+público desligado, chave de assinatura ES256. O Worker ainda roda só localmente (`wrangler dev`).
+Para aplicar migrations novas: `npx supabase@latest db push --db-url <url>`. Cuidado: o `npx` repete
+o comando na tela, então a senha dentro da URL aparece na saída e no log do npm.
 
 ## Estrutura
 

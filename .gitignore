@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 .wrangler/
+supabase/.temp/
 *.log
 apps/worker/worker-configuration.d.ts
 

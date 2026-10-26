@@ -87,8 +87,11 @@ novas para continuar compatível com o Supabase.
 ### Pendências conhecidas
 
 - Tabelas de fotos, lembretes, log da persona e dicas entram nas fases 4, 6 e 8.
-- O cliente PostgREST foi testado com `fetch` simulado; falta o teste com o Supabase real.
+- Cliente PostgREST validado com o Supabase real (26/10/2026): login ES256, 401 sem token ou com
+  token adulterado, criar/repetir/concluir/desfazer, preferências, isolamento por casa e chave
+  pública sem acesso direto às tabelas.
   A documentação confirma que chaves secretas novas (`sb_secret_`) vão no cabeçalho `apikey` [C].
+  O Supabase recusa chave secreta quando o User-Agent parece de navegador (ex.: PowerShell 5.1).
 
 ## API HTTP (Fase 3)
 
