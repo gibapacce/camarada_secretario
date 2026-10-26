@@ -24,3 +24,11 @@ export {
   type TaskStatus,
   type TaskView,
 } from './tasks.ts';
+export {
+  createMemberService,
+  preferencesSchema,
+  type GuidanceMode,
+  type MemberContext,
+  type MemberService,
+  type PersonaIntensity,
+} from './members.ts';

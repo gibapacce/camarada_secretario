@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { DB_FUNCTIONS, toDomainError, type DbClient, type DbFunction } from './client.ts';
 
 const ROOT = new URL('../../../', import.meta.url);
-export const MIGRATIONS_DIR = fileURLToPath(new URL('supabase/migrations/', ROOT));
-export const SEED_FILE = fileURLToPath(new URL('supabase/seed.sql', ROOT));
+export const MIGRATIONS_DIR = fileURLToPath(new URL('supabase/migrations/', ROOT).href);
+export const SEED_FILE = fileURLToPath(new URL('supabase/seed.sql', ROOT).href);
 
 export async function applyMigrations(pg: PGlite): Promise<string[]> {
   const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort();

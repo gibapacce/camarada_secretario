@@ -87,9 +87,28 @@ novas para continuar compatível com o Supabase.
 ### Pendências conhecidas
 
 - Tabelas de fotos, lembretes, log da persona e dicas entram nas fases 4, 6 e 8.
-- A API HTTP de tarefas entra na Fase 3, junto com o login; sem autenticação ela não é exposta.
-- O cliente PostgREST foi testado com `fetch` simulado. O envio de chaves no formato novo
-  (`sb_secret_`) só em `apikey` é [H] e será validado no primeiro teste com o Supabase real.
+- O cliente PostgREST foi testado com `fetch` simulado; falta o teste com o Supabase real.
+  A documentação confirma que chaves secretas novas (`sb_secret_`) vão no cabeçalho `apikey` [C].
+
+## API HTTP (Fase 3)
+
+O painel fala só com o Worker (`/api/*`, mesmo domínio, sem CORS). O Worker usa a chave secreta
+do Supabase; o navegador nunca a recebe.
+
+- **Autenticação:** `Authorization: Bearer <access token do Supabase Auth>`. O Worker verifica a
+  assinatura com as chaves públicas do projeto (`/auth/v1/.well-known/jwks.json`, via `jose`),
+  além de emissor, audiência `authenticated`, papel e expiração [C]. O token só identifica o
+  usuário; casa e pessoa vêm de `household_members.auth_user_id` no banco. Dados de casa/autor
+  enviados pelo navegador são ignorados.
+- **Idempotência:** toda alteração exige o cabeçalho `Idempotency-Key` (UUID gerado pelo painel),
+  gravado como `web:<uuid>`. Clique duplo ou reenvio devolvem o mesmo resultado.
+- **Rotas:** `GET /api/health` (pública), `GET /api/me`, `PATCH /api/me/preferences`,
+  `GET|POST /api/tasks`, `GET|PATCH /api/tasks/:id`, `POST /api/tasks/:id/(complete|reopen|cancel)`,
+  `POST /api/undo`.
+- **Respostas:** sempre JSON `{ok, ...}` com `cache-control: no-store`. 401 token inválido,
+  403 não é membro, 404 tarefa de outra casa ou inexistente, 409 conflito de negócio,
+  413/415 corpo inválido (limite de 16 KB), 503 banco ou chaves de autenticação indisponíveis.
+  Erros inesperados viram 500 genérico, sem detalhes internos.
 
 ## Por que não WhatsApp (por enquanto)
 

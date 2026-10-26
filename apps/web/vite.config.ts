@@ -14,5 +14,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Forks com jsdom estouravam o tempo de inicialização no Windows; threads é estável.
+    pool: 'threads',
   },
 });

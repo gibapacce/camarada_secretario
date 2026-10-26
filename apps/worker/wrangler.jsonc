@@ -3,6 +3,7 @@
   "name": "camarada-ho-chi-miau",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-19",
+  "minify": true,
   "assets": {
     "directory": "../web/dist",
     "binding": "ASSETS",

@@ -1,35 +1,32 @@
+import { PostgrestDbClient, createMemberService, createTaskService } from '@camarada/db';
+import { handleApi, type ApiDeps } from './api.ts';
+import { getTokenVerifier } from './auth.ts';
+
 export interface Env {
   ASSETS: Fetcher;
   APP_ENV: string;
+  SUPABASE_URL?: string;
+  SUPABASE_SECRET_KEY?: string;
 }
 
-const JSON_HEADERS = {
-  'content-type': 'application/json; charset=utf-8',
-  'cache-control': 'no-store',
-} as const;
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-export async function handleApi(request: Request, env: Env): Promise<Response> {
-  const { pathname } = new URL(request.url);
-
-  if (pathname === '/api/health') {
-    if (request.method !== 'GET') {
-      return json({ ok: false, error: 'method_not_allowed' }, 405);
-    }
-    return json({ ok: true, service: 'camarada-ho-chi-miau', env: env.APP_ENV });
+/** Sem SUPABASE_URL/SUPABASE_SECRET_KEY a API responde 503 (exceto /api/health). */
+export function buildDeps(env: Env): ApiDeps | null {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) {
+    return null;
   }
-
-  return json({ ok: false, error: 'not_found' }, 404);
+  const db = new PostgrestDbClient({ url: env.SUPABASE_URL, serviceKey: env.SUPABASE_SECRET_KEY });
+  return {
+    tasks: createTaskService(db),
+    members: createMemberService(db),
+    verifyToken: getTokenVerifier(env.SUPABASE_URL),
+  };
 }
 
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
     if (pathname === '/api' || pathname.startsWith('/api/')) {
-      return handleApi(request, env);
+      return handleApi(request, buildDeps(env));
     }
     return env.ASSETS.fetch(request);
   },

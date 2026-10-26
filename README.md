@@ -11,12 +11,12 @@ backend valida e executa. A persona é apenas camada de apresentação.
 
 ## Estado atual
 
-| Fase                       | Situação                     |
-| -------------------------- | ---------------------------- |
-| 0 Viabilidade e decisões   | ✅ Concluída                 |
-| 1 Esqueleto e documentação | ✅ Concluída                 |
-| 2 Banco e regras           | ✅ Concluída (local, PGlite) |
-| 3 Painel web               | ⏳ Próxima                   |
+| Fase                       | Situação                                                 |
+| -------------------------- | -------------------------------------------------------- |
+| 0 Viabilidade e decisões   | ✅ Concluída                                             |
+| 1 Esqueleto e documentação | ✅ Concluída                                             |
+| 2 Banco e regras           | ✅ Concluída (local, PGlite)                             |
+| 3 Painel web               | 🔧 Em andamento: API autenticada pronta; painel a seguir |
 
 Nenhum serviço em nuvem foi criado ainda. Tudo roda localmente. As migrations ainda não foram
 aplicadas num Supabase real; isso acontece quando a conta for criada (Fase 3).

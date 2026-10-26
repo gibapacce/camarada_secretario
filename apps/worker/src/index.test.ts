@@ -13,7 +13,17 @@ describe('worker fetch', () => {
     const res = await worker.fetch(new Request('http://localhost/api/health'), makeEnv());
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
-    expect(await res.json()).toEqual({ ok: true, service: 'camarada-ho-chi-miau', env: 'test' });
+    expect(await res.json()).toEqual({
+      ok: true,
+      service: 'camarada-ho-chi-miau',
+      configured: false,
+    });
+  });
+
+  it('responde 503 nas rotas protegidas quando o banco não está configurado', async () => {
+    const res = await worker.fetch(new Request('http://localhost/api/me'), makeEnv());
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ ok: false, error: 'not_configured' });
   });
 
   it('recusa método diferente de GET no health', async () => {
