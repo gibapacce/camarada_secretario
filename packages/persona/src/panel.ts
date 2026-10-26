@@ -11,7 +11,7 @@ export interface PanelText {
   newTask: string;
   shared: string;
   emptyList: string;
-  photosSoon: string;
+  noPhotos: string;
   counters: { open: string; overdue: string; dueWeek: string; completedWeek: string };
   greeting: (name: string) => string | null;
 }
@@ -27,7 +27,7 @@ const NEUTRAL: PanelText = {
   newTask: 'Nova tarefa',
   shared: 'Compartilhada',
   emptyList: 'Nenhuma tarefa aqui.',
-  photosSoon: 'Fotos chegam em breve.',
+  noPhotos: 'Nenhuma foto ainda.',
   counters: {
     open: 'Pendentes',
     overdue: 'Atrasadas',
@@ -53,7 +53,7 @@ const THEMED: PanelText = {
   newTask: 'Nova missão',
   shared: 'Coletiva',
   emptyList: 'Nenhuma missão aqui.',
-  photosSoon: 'O Arquivo Nacional (fotos) abre em breve.',
+  noPhotos: 'O Arquivo Nacional desta missão está vazio.',
   counters: {
     open: 'Missões em andamento',
     overdue: 'Desvios de rota',
@@ -74,7 +74,15 @@ export function panelText(intensity: PersonaIntensity): PanelText {
   return intensity === 'off' ? NEUTRAL : intensity === 'light' ? THEMED : FULL;
 }
 
-export type PanelEvent = 'created' | 'updated' | 'completed' | 'reopened' | 'cancelled' | 'undone';
+export type PanelEvent =
+  | 'created'
+  | 'updated'
+  | 'completed'
+  | 'reopened'
+  | 'cancelled'
+  | 'undone'
+  | 'photo_added'
+  | 'photo_removed';
 
 const SENSITIVE =
   /\b(medic[oa]s?|hospita\w*|exames?|consultas?|remedios?|cirurgi\w*|terapia|doen\w*|luto|velorio|enterro|funeral|dividas?|emprestimos?)\b/;
@@ -95,6 +103,8 @@ const NEUTRAL_ACTION: Record<PanelEvent, string> = {
   reopened: 'Tarefa reaberta: "{t}".',
   cancelled: 'Tarefa cancelada: "{t}".',
   undone: 'Ação desfeita em "{t}".',
+  photo_added: 'Foto anexada a "{t}".',
+  photo_removed: 'Foto removida de "{t}".',
 };
 
 const THEMED_ACTION: Record<PanelEvent, string> = {
@@ -104,11 +114,14 @@ const THEMED_ACTION: Record<PanelEvent, string> = {
   reopened: 'Missão reaberta: "{t}". A luta continua.',
   cancelled: 'Missão cancelada: "{t}".',
   undone: 'Autocrítica aceita: ação desfeita em "{t}".',
+  photo_added: '📸 Prova documental anexada a "{t}".',
+  photo_removed: 'Prova documental retirada de "{t}".',
 };
 
 const FULL_SPICE: Partial<Record<PanelEvent, string>> = {
   created: ' Que as patas do proletariado façam o seu trabalho. Miau!',
   completed: ' A burguesia da pia treme. 🐱🚩',
+  photo_added: ' Arquivada no Arquivo Nacional, em segurança.',
 };
 
 /** Fato primeiro (título exato), tempero depois. */

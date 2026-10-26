@@ -32,3 +32,13 @@ export {
   type MemberService,
   type PersonaIntensity,
 } from './members.ts';
+export {
+  PHOTO_TYPES,
+  addPhotoSchema,
+  createPhotoService,
+  photoPath,
+  type PhotoContentType,
+  type PhotoResult,
+  type PhotoService,
+  type TaskPhoto,
+} from './photos.ts';

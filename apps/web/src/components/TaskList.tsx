@@ -25,6 +25,11 @@ export function TaskBadges({ task }: { task: Task }) {
       {task.is_overdue && <span className="badge badge-overdue">Atrasada</span>}
       {task.priority === 'high' && <span className="badge badge-high">Prioridade alta</span>}
       {task.recurrence_rule_id && <span className="badge">Recorrente</span>}
+      {task.photo_count > 0 && (
+        <span className="badge" aria-label={`${task.photo_count} foto(s)`}>
+          📸 {task.photo_count}
+        </span>
+      )}
       {(task.status === 'completed' || task.status === 'cancelled') && (
         <span className={`badge badge-${task.status}`}>{STATUS_LABEL[task.status]}</span>
       )}

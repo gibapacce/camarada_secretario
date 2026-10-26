@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { PhotoSection } from '../components/PhotoSection.tsx';
 import { TaskBadges, priorityLabel, STATUS_LABEL } from '../components/TaskList.tsx';
 import { TaskForm } from '../components/TaskForm.tsx';
 import { errorText, type TaskEvent } from '../lib/api.ts';
@@ -177,7 +178,7 @@ export function TaskDetailsPage({ id }: { id: string }) {
       </div>
 
       <h2>{text.photosTitle}</h2>
-      <p className="muted">{text.photosSoon}</p>
+      <PhotoSection taskId={task.id} photos={data.photos ?? []} />
 
       <h2>{text.historyTitle}</h2>
       <ol className="history">

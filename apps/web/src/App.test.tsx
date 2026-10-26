@@ -36,6 +36,7 @@ function task(over: Partial<Task> = {}): Task {
     created_at: '2026-10-26T12:00:00Z',
     updated_at: '2026-10-26T12:00:00Z',
     is_overdue: false,
+    photo_count: 0,
     ...over,
   };
 }
@@ -76,7 +77,24 @@ function fakeApi(intensity: PersonaIntensity = 'full') {
         tasks: p.view === 'overdue' ? [overdue] : p.view === 'completed' ? [] : [pending, overdue],
       }),
     ),
-    getTask: vi.fn((_id: string) => ok({ task: pending, events: [] })),
+    getTask: vi.fn((_id: string) =>
+      ok({
+        task: { ...pending, photo_count: 1 },
+        events: [],
+        photos: [
+          {
+            id: '00000000-0000-4000-8000-0000000000f1',
+            task_id: pending.id,
+            content_type: 'image/jpeg' as const,
+            size_bytes: 1000,
+            caption: 'Antes da faxina',
+            uploaded_by_member_id: OTHER,
+            created_at: '2026-10-26T12:00:00Z',
+            url: 'https://x.supabase.co/storage/v1/object/sign/task-photos/a.jpg?token=t',
+          },
+        ],
+      }),
+    ),
     createTask: vi.fn((input: { title: string }, _key: string) =>
       ok({
         event: 'task_created',
@@ -90,6 +108,36 @@ function fakeApi(intensity: PersonaIntensity = 'full') {
       ok({ event: 'task_completed', task: { ...pending, status: 'completed' as const } }),
     ),
     undo: vi.fn((_key: string) => ok({ event: 'action_undone', task: pending })),
+    uploadPhoto: vi.fn((_taskId: string, _file: Blob, caption: string, _key: string) =>
+      ok({
+        event: 'photo_added',
+        task: pending,
+        photo: {
+          id: '00000000-0000-4000-8000-0000000000f2',
+          task_id: pending.id,
+          content_type: 'image/jpeg' as const,
+          size_bytes: 10,
+          caption,
+          uploaded_by_member_id: ME,
+          created_at: '2026-10-26T13:00:00Z',
+        },
+      }),
+    ),
+    deletePhoto: vi.fn((_photoId: string, _key: string) =>
+      ok({
+        event: 'photo_removed',
+        task: pending,
+        photo: {
+          id: '00000000-0000-4000-8000-0000000000f1',
+          task_id: pending.id,
+          content_type: 'image/jpeg' as const,
+          size_bytes: 10,
+          caption: null,
+          uploaded_by_member_id: ME,
+          created_at: '2026-10-26T13:00:00Z',
+        },
+      }),
+    ),
   } satisfies Api;
 }
 
@@ -231,5 +279,41 @@ describe('App', () => {
     );
     await act(() => Promise.resolve());
     await waitFor(() => expect(api.me.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('mostra as fotos da tarefa com URL temporária e legenda', async () => {
+    renderApp({ auth: fakeAuth(true), api: fakeApi('full') }, `/tarefas/${task().id}`);
+    const img = await screen.findByRole('img', { name: 'Antes da faxina' });
+    expect(img.getAttribute('src')).toContain('token=t');
+    expect(screen.getByRole('heading', { name: 'Arquivo Nacional' })).toBeDefined();
+  });
+
+  it('anexa foto com chave de idempotência e avisa com o título exato', async () => {
+    const api = fakeApi('full');
+    renderApp({ auth: fakeAuth(true), api }, `/tarefas/${task().id}`);
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff])], 'f.jpg', { type: 'image/jpeg' });
+    fireEvent.change(await screen.findByLabelText('Foto'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Legenda (opcional)'), { target: { value: 'Depois' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Anexar foto' }));
+    await waitFor(() => expect(api.uploadPhoto).toHaveBeenCalledTimes(1));
+    const [taskId, blob, caption, key] = api.uploadPhoto.mock.calls[0] ?? [];
+    expect([taskId, blob, caption]).toEqual([task().id, file, 'Depois']);
+    expect(key).toMatch(UUID_RE);
+    const toast = await screen.findByRole('status');
+    await waitFor(() =>
+      expect(toast.textContent).toContain('📸 Prova documental anexada a "Lavar a louça".'),
+    );
+  });
+
+  it('recusa arquivo que não é imagem antes de enviar', async () => {
+    const api = fakeApi('off');
+    renderApp({ auth: fakeAuth(true), api }, `/tarefas/${task().id}`);
+    const file = new File(['oi'], 'nota.txt', { type: 'text/plain' });
+    fireEvent.change(await screen.findByLabelText('Foto'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Anexar foto' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'O arquivo precisa ser uma imagem.',
+    );
+    expect(api.uploadPhoto).not.toHaveBeenCalled();
   });
 });

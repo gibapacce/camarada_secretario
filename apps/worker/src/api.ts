@@ -1,19 +1,29 @@
 import {
   DomainError,
   TASK_VIEWS,
+  photoPath,
   type MemberContext,
   type MemberService,
+  type PhotoResult,
+  type PhotoService,
+  type TaskPhoto,
   type TaskService,
 } from '@camarada/db';
 import { AuthUnavailableError, type TokenVerifier } from './auth.ts';
+import { detectImageType, type PhotoStorage } from './storage.ts';
 
 export interface ApiDeps {
   tasks: TaskService;
   members: MemberService;
+  photos: PhotoService;
+  storage: PhotoStorage;
   verifyToken: TokenVerifier;
+  maxPhotoBytes?: number;
 }
 
 const MAX_BODY_BYTES = 16 * 1024;
+export const DEFAULT_MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const SIGNED_URL_SECONDS = 15 * 60;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const STATUS_BY_ERROR: Record<string, number> = {
@@ -26,11 +36,16 @@ const STATUS_BY_ERROR: Record<string, number> = {
   not_a_member: 403,
   not_found: 404,
   task_not_found: 404,
+  photo_not_found: 404,
   method_not_allowed: 405,
   idempotency_key_conflict: 409,
+  photo_limit: 409,
   payload_too_large: 413,
+  photo_too_large: 413,
   unsupported_media_type: 415,
+  unsupported_image: 415,
   db_unavailable: 503,
+  storage_unavailable: 503,
   auth_unavailable: 503,
   not_configured: 503,
 };
@@ -112,6 +127,86 @@ const scopeOf = (member: MemberContext) => ({
   actorMemberId: member.member.id,
 });
 
+/** O caminho interno do arquivo nunca sai do Worker. */
+function publicPhoto({ storage_path: _path, ...photo }: TaskPhoto, url?: string | null) {
+  return url === undefined ? photo : { ...photo, url };
+}
+
+function publicPhotoResult(r: PhotoResult) {
+  return r.ok ? { ...r, photo: publicPhoto(r.photo) } : r;
+}
+
+async function removeQuietly(storage: PhotoStorage, paths: string[]) {
+  try {
+    await storage.remove(paths);
+  } catch {
+    console.warn('photo_remove_failed');
+  }
+}
+
+async function uploadPhoto(
+  request: Request,
+  taskId: string,
+  deps: ApiDeps,
+  member: MemberContext,
+): Promise<Response> {
+  const key = idempotencyKey(request);
+  if (!UUID_RE.test(taskId)) {
+    throw new HttpError('task_not_found');
+  }
+  const max = deps.maxPhotoBytes ?? DEFAULT_MAX_PHOTO_BYTES;
+  if (!request.headers.get('content-type')?.toLowerCase().startsWith('multipart/form-data')) {
+    throw new HttpError('unsupported_media_type');
+  }
+  if (Number(request.headers.get('content-length') ?? 0) > max + 64 * 1024) {
+    throw new HttpError('photo_too_large');
+  }
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    throw new HttpError('invalid_input');
+  }
+  const file = form.get('file');
+  if (file === null || typeof file === 'string') {
+    throw new HttpError('invalid_input');
+  }
+  if (file.size > max) {
+    throw new HttpError('photo_too_large');
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const contentType = detectImageType(bytes);
+  if (!contentType) {
+    throw new HttpError('unsupported_image');
+  }
+  const caption = form.get('caption');
+  const scope = scopeOf(member);
+  const photoId = crypto.randomUUID();
+  const path = photoPath(scope.householdId, taskId, photoId, contentType);
+
+  await deps.storage.upload(path, bytes, contentType);
+  let r: PhotoResult;
+  try {
+    r = await deps.photos.addPhoto({
+      ...scope,
+      taskId,
+      photoId,
+      contentType,
+      sizeBytes: bytes.byteLength,
+      ...(typeof caption === 'string' && caption.trim() && { caption }),
+      idempotencyKey: key,
+    });
+  } catch (error) {
+    await removeQuietly(deps.storage, [path]);
+    throw error;
+  }
+  // Repetição ou recusa: o arquivo recém-enviado não ficou ligado a nenhum registro.
+  if (!r.ok || r.replayed) {
+    await removeQuietly(deps.storage, [path]);
+  }
+  return result(publicPhotoResult(r));
+}
+
 const routes: Route[] = [
   {
     pattern: /^\/api\/me$/,
@@ -162,13 +257,30 @@ const routes: Route[] = [
   {
     pattern: /^\/api\/tasks\/([^/]+)$/,
     methods: {
-      GET: async ({ params, deps, member }) =>
-        result(
-          await deps.tasks.getTask({
-            householdId: member.member.household_id,
-            taskId: params[0] ?? '',
-          }),
-        ),
+      GET: async ({ params, deps, member }) => {
+        const r = await deps.tasks.getTask({
+          householdId: member.member.household_id,
+          taskId: params[0] ?? '',
+        });
+        if (!r.ok || !r.photos) {
+          return result(r);
+        }
+        let urls = new Map<string, string>();
+        if (r.photos.length > 0) {
+          try {
+            urls = await deps.storage.sign(
+              r.photos.map((p) => p.storage_path),
+              SIGNED_URL_SECONDS,
+            );
+          } catch {
+            console.warn('photo_sign_failed');
+          }
+        }
+        return json({
+          ...r,
+          photos: r.photos.map((p) => publicPhoto(p, urls.get(p.storage_path) ?? null)),
+        });
+      },
       PATCH: async ({ request, params, deps, member }) => {
         const key = idempotencyKey(request);
         const body = await readJson(request);
@@ -200,6 +312,29 @@ const routes: Route[] = [
         return result(
           await deps.tasks.cancelTask({ ...input, stopRecurrence: body.stopRecurrence === true }),
         );
+      },
+    },
+  },
+  {
+    pattern: /^\/api\/tasks\/([^/]+)\/photos$/,
+    methods: {
+      POST: ({ request, params, deps, member }) =>
+        uploadPhoto(request, params[0] ?? '', deps, member),
+    },
+  },
+  {
+    pattern: /^\/api\/photos\/([^/]+)$/,
+    methods: {
+      DELETE: async ({ request, params, deps, member }) => {
+        const r = await deps.photos.deletePhoto({
+          ...scopeOf(member),
+          photoId: params[0] ?? '',
+          idempotencyKey: idempotencyKey(request),
+        });
+        if (r.ok && r.event === 'photo_removed') {
+          await removeQuietly(deps.storage, [r.photo.storage_path]);
+        }
+        return result(publicPhotoResult(r));
       },
     },
   },

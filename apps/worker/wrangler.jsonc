@@ -12,6 +12,7 @@
   },
   "vars": {
     "APP_ENV": "development",
+    "PHOTO_MAX_BYTES": "5242880",
   },
   // Plano gratuito: sem limits/usage_model pagos. Nada de R2, Queues ou Durable Objects por enquanto.
   "observability": {

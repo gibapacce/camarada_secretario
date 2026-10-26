@@ -11,12 +11,13 @@ backend valida e executa. A persona é apenas camada de apresentação.
 
 ## Estado atual
 
-| Fase                       | Situação                                                        |
-| -------------------------- | --------------------------------------------------------------- |
-| 0 Viabilidade e decisões   | ✅ Concluída                                                    |
-| 1 Esqueleto e documentação | ✅ Concluída                                                    |
-| 2 Banco e regras           | ✅ Concluída (local, PGlite)                                    |
-| 3 Painel web               | ✅ Concluída localmente (fotos na Fase 4; publicação na Fase 9) |
+| Fase                       | Situação                                                  |
+| -------------------------- | --------------------------------------------------------- |
+| 0 Viabilidade e decisões   | ✅ Concluída                                              |
+| 1 Esqueleto e documentação | ✅ Concluída                                              |
+| 2 Banco e regras           | ✅ Concluída (local, PGlite)                              |
+| 3 Painel web               | ✅ Concluída localmente (publicação na Fase 9)            |
+| 4 Fotos                    | ✅ Concluída localmente (bucket privado no Supabase real) |
 
 O projeto Supabase (plano Free, São Paulo) existe e tem as migrations aplicadas, sem o seed. Cadastro
 público desligado, chave de assinatura ES256. O Worker ainda roda só localmente (`wrangler dev`).

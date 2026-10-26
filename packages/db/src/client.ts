@@ -9,6 +9,8 @@ export const DB_FUNCTIONS = [
   'get_task',
   'get_member_context',
   'update_member_preferences',
+  'add_task_photo',
+  'delete_task_photo',
 ] as const;
 export type DbFunction = (typeof DB_FUNCTIONS)[number];
 

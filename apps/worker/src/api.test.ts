@@ -1,16 +1,39 @@
 import type { PGlite } from '@electric-sql/pglite';
-import { createMemberService, createTaskService } from '@camarada/db';
+import {
+  DomainError,
+  createMemberService,
+  createPhotoService,
+  createTaskService,
+} from '@camarada/db';
 import { PgliteDbClient, createFixture, createTestDb, type Fixture } from '@camarada/db/testing';
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type CryptoKey } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { handleApi, type ApiDeps } from './api.ts';
 import { AuthUnavailableError, createTokenVerifier } from './auth.ts';
+import type { PhotoStorage } from './storage.ts';
 
 const SUPABASE_URL = 'https://teste.supabase.co';
 const ISSUER = `${SUPABASE_URL}/auth/v1`;
 
+class MemoryStorage implements PhotoStorage {
+  readonly objects = new Map<string, { bytes: Uint8Array; contentType: string }>();
+  failUpload = false;
+
+  async upload(path: string, bytes: Uint8Array, contentType: string) {
+    if (this.failUpload) throw new DomainError('storage_unavailable');
+    this.objects.set(path, { bytes, contentType });
+  }
+  async remove(paths: string[]) {
+    for (const p of paths) this.objects.delete(p);
+  }
+  async sign(paths: string[]) {
+    return new Map(paths.map((p) => [p, `https://assinada.test/${p}?token=t`]));
+  }
+}
+
 let pg: PGlite;
 let deps: ApiDeps;
+let storage: MemoryStorage;
 let signingKey: CryptoKey;
 let foreignKey: CryptoKey;
 let f: Fixture;
@@ -23,9 +46,13 @@ beforeAll(async () => {
   signingKey = pair.privateKey;
   foreignKey = (await generateKeyPair('ES256')).privateKey;
   const jwk = { ...(await exportJWK(pair.publicKey)), kid: 'k1', alg: 'ES256' };
+  storage = new MemoryStorage();
   deps = {
     tasks: createTaskService(db),
     members: createMemberService(db),
+    photos: createPhotoService(db),
+    storage,
+    maxPhotoBytes: 1024,
     verifyToken: createTokenVerifier({
       supabaseUrl: SUPABASE_URL,
       keys: createLocalJWKSet({ keys: [jwk] }),
@@ -69,6 +96,7 @@ interface CallOptions {
   bearer?: string;
   body?: unknown;
   rawBody?: string;
+  form?: FormData;
   contentType?: string;
   key?: string | null;
 }
@@ -82,8 +110,8 @@ async function call(method: string, path: string, o: CallOptions = {}) {
   if (o.key !== null && method !== 'GET') {
     headers.set('idempotency-key', o.key ?? crypto.randomUUID());
   }
-  const body = o.rawBody ?? (o.body === undefined ? undefined : JSON.stringify(o.body));
-  if (body !== undefined) {
+  const body = o.form ?? o.rawBody ?? (o.body === undefined ? undefined : JSON.stringify(o.body));
+  if (body !== undefined && !o.form) {
     headers.set('content-type', o.contentType ?? 'application/json');
   }
   const res = await handleApi(
@@ -329,5 +357,131 @@ describe('validação de requisição', () => {
   it('404 para rota desconhecida e 405 para método errado', async () => {
     expect((await call('GET', '/api/nada', { as: users.ana })).status).toBe(404);
     expect((await call('DELETE', '/api/tasks', { as: users.ana })).status).toBe(405);
+  });
+});
+
+describe('fotos', () => {
+  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+
+  function form(bytes: Uint8Array, type = 'image/jpeg', caption?: string) {
+    const fd = new FormData();
+    fd.set('file', new Blob([bytes], { type }), 'foto');
+    if (caption !== undefined) fd.set('caption', caption);
+    return fd;
+  }
+
+  async function newTask(as = users.ana) {
+    return (await call('POST', '/api/tasks', { as, body: { title: 'Montar o armário' } })).body.task
+      .id as string;
+  }
+
+  beforeEach(() => {
+    storage.objects.clear();
+    storage.failUpload = false;
+  });
+
+  it('envia, lista com URL assinada e não expõe o caminho interno', async () => {
+    const taskId = await newTask();
+    const up = await call('POST', `/api/tasks/${taskId}/photos`, {
+      as: users.pedro,
+      form: form(PNG, 'image/jpeg', 'Antes'),
+    });
+    expect(up.status).toBe(200);
+    expect(up.body).toMatchObject({ ok: true, event: 'photo_added', task: { photo_count: 1 } });
+    expect(up.body.photo).toMatchObject({ content_type: 'image/png', caption: 'Antes' });
+    expect(up.body.photo.storage_path).toBeUndefined();
+    expect([...storage.objects.keys()]).toEqual([
+      `${f.householdId}/${taskId}/${up.body.photo.id}.png`,
+    ]);
+
+    const details = await call('GET', `/api/tasks/${taskId}`, { as: users.ana });
+    expect(details.body.photos).toHaveLength(1);
+    expect(details.body.photos[0].url).toMatch(/^https:\/\/assinada\.test\/.+\?token=t$/);
+    expect(JSON.stringify(details.body)).not.toContain('storage_path');
+  });
+
+  it('recusa arquivo que não é imagem, mesmo dizendo ser JPEG', async () => {
+    const taskId = await newTask();
+    const res = await call('POST', `/api/tasks/${taskId}/photos`, {
+      as: users.ana,
+      form: form(new TextEncoder().encode('<script>alert(1)</script>')),
+    });
+    expect(res).toMatchObject({ status: 415, body: { error: 'unsupported_image' } });
+    expect(storage.objects.size).toBe(0);
+  });
+
+  it('recusa foto acima do limite', async () => {
+    const taskId = await newTask();
+    const big = new Uint8Array(2048);
+    big.set(JPEG);
+    const res = await call('POST', `/api/tasks/${taskId}/photos`, {
+      as: users.ana,
+      form: form(big),
+    });
+    expect(res).toMatchObject({ status: 413, body: { error: 'photo_too_large' } });
+    expect(storage.objects.size).toBe(0);
+  });
+
+  it('não anexa a tarefa de outra casa e não deixa arquivo órfão', async () => {
+    const taskId = await newTask();
+    const res = await call('POST', `/api/tasks/${taskId}/photos`, {
+      as: users.outsider,
+      form: form(JPEG),
+    });
+    expect(res.status).toBe(404);
+    expect(storage.objects.size).toBe(0);
+  });
+
+  it('repetir o envio devolve a mesma foto e descarta o arquivo duplicado', async () => {
+    const taskId = await newTask();
+    const key = crypto.randomUUID();
+    const first = await call('POST', `/api/tasks/${taskId}/photos`, {
+      as: users.ana,
+      key,
+      form: form(JPEG),
+    });
+    const again = await call('POST', `/api/tasks/${taskId}/photos`, {
+      as: users.ana,
+      key,
+      form: form(JPEG),
+    });
+    expect(again.body).toMatchObject({ replayed: true, photo: { id: first.body.photo.id } });
+    expect(storage.objects.size).toBe(1);
+  });
+
+  it('exige chave de idempotência e informa falha do armazenamento', async () => {
+    const taskId = await newTask();
+    const noKey = await call('POST', `/api/tasks/${taskId}/photos`, {
+      as: users.ana,
+      key: null,
+      form: form(JPEG),
+    });
+    expect(noKey.status).toBe(400);
+    storage.failUpload = true;
+    const down = await call('POST', `/api/tasks/${taskId}/photos`, {
+      as: users.ana,
+      form: form(JPEG),
+    });
+    expect(down).toMatchObject({ status: 503, body: { error: 'storage_unavailable' } });
+    const details = await call('GET', `/api/tasks/${taskId}`, { as: users.ana });
+    expect(details.body.photos).toEqual([]);
+  });
+
+  it('remove a foto e o arquivo; outra casa não consegue remover', async () => {
+    const taskId = await newTask();
+    const up = await call('POST', `/api/tasks/${taskId}/photos`, {
+      as: users.ana,
+      form: form(JPEG),
+    });
+    const photoId: string = up.body.photo.id;
+    expect((await call('DELETE', `/api/photos/${photoId}`, { as: users.outsider })).status).toBe(
+      404,
+    );
+    expect(storage.objects.size).toBe(1);
+
+    const del = await call('DELETE', `/api/photos/${photoId}`, { as: users.pedro });
+    expect(del.body).toMatchObject({ ok: true, event: 'photo_removed', task: { photo_count: 0 } });
+    expect(storage.objects.size).toBe(0);
   });
 });

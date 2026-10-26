@@ -87,7 +87,7 @@ novas para continuar compatível com o Supabase.
 
 ### Pendências conhecidas
 
-- Tabelas de fotos, lembretes, log da persona e dicas entram nas fases 4, 6 e 8.
+- Tabelas de lembretes, log da persona e dicas entram nas fases 6 e 8.
 - Cliente PostgREST validado com o Supabase real (26/10/2026): login ES256, 401 sem token ou com
   token adulterado, criar/repetir/concluir/desfazer, preferências, isolamento por casa e chave
   pública sem acesso direto às tabelas.
@@ -108,7 +108,8 @@ do Supabase; o navegador nunca a recebe.
   gravado como `web:<uuid>`. Clique duplo ou reenvio devolvem o mesmo resultado.
 - **Rotas:** `GET /api/health` (pública), `GET /api/me`, `PATCH /api/me/preferences`,
   `GET|POST /api/tasks`, `GET|PATCH /api/tasks/:id`, `POST /api/tasks/:id/(complete|reopen|cancel)`,
-  `POST /api/undo`.
+  `POST /api/undo`, `POST /api/tasks/:id/photos` (multipart: `file`, `caption`) e
+  `DELETE /api/photos/:id`.
 - **Respostas:** sempre JSON `{ok, ...}` com `cache-control: no-store`. 401 token inválido,
   403 não é membro, 404 tarefa de outra casa ou inexistente, 409 conflito de negócio,
   413/415 corpo inválido (limite de 16 KB), 503 banco ou chaves de autenticação indisponíveis.
@@ -134,6 +135,25 @@ do Supabase; o navegador nunca a recebe.
   sem scripts ou estilos inline), `frame-ancestors 'none'`, `nosniff` e `Referrer-Policy`.
 - **Validado no navegador** com o Supabase real (26/10/2026): login, resumo, criar com acentos,
   concluir, desfazer, calendário, modo sério e cabeçalhos de segurança.
+
+## Fotos (Fase 4)
+
+- **Armazenamento:** bucket privado `task-photos` (criado pela migration; limite de 5 MB e só
+  `image/jpeg`, `image/png`, `image/webp`). Caminho `<casa>/<tarefa>/<foto>.<ext>`, conferido pelo
+  banco. Sem políticas de acesso em `storage.objects`: só o Worker (chave secreta) lê e grava.
+- **Envio:** o painel reduz a foto para no máximo 1600 px e regrava em JPEG (economiza cota e
+  remove metadados como GPS). O Worker valida tamanho (`PHOTO_MAX_BYTES`, padrão 5 MB) e o tipo
+  **real** pelos primeiros bytes, ignorando o tipo declarado. Envia ao bucket e só então grava o
+  registro (`add_task_photo`); se o registro falhar ou for repetição, o arquivo novo é apagado.
+- **Leitura:** `GET /api/tasks/:id` devolve as fotos com URL assinada de 15 minutos (uma chamada
+  em lote). O caminho interno nunca sai do Worker. CSP libera `img-src https://*.supabase.co`.
+- **Limites e retenção:** até 10 fotos por tarefa. Remover marca `deleted_at`/`deleted_by` (fica
+  o registro de quem removeu) e apaga o arquivo do bucket na hora. Se o bucket falhar na remoção,
+  sobra um arquivo órfão: a varredura periódica entra com o Cron (Fase 8). Fotos de tarefas
+  canceladas ou concluídas ficam guardadas; apagar a casa apaga os registros em cascata.
+- **Validado com o Supabase real** (26/10/2026): bucket privado e limites, envio, URL temporária,
+  sem acesso por endereço público, chave pública, login do usuário ou token adulterado, arquivo
+  falso recusado, outra casa sem acesso e remoção apagando o arquivo.
 
 ## Por que não WhatsApp (por enquanto)
 

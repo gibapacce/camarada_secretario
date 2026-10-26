@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DomainError, type DbClient } from './client.ts';
+import type { TaskPhoto } from './photos.ts';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 export type TaskPriority = 'low' | 'normal' | 'high';
@@ -24,6 +25,7 @@ export interface Task {
   created_at: string;
   updated_at: string;
   is_overdue: boolean;
+  photo_count: number;
 }
 
 export interface TaskEvent {
@@ -61,6 +63,7 @@ export interface TaskDetailsResult {
   error?: string;
   task?: Task;
   events?: TaskEvent[];
+  photos?: TaskPhoto[];
 }
 
 const id = z.uuid();

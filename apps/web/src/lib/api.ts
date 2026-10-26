@@ -1,19 +1,24 @@
 import type {
+  TaskDetailsResult as DbTaskDetails,
   MemberContext,
   Task,
-  TaskDetailsResult,
   TaskListResult,
+  TaskPhoto,
   TaskResult,
 } from '@camarada/db';
 
-export type {
-  MemberContext,
-  Task,
-  TaskDetailsResult,
-  TaskEvent,
-  TaskListResult,
-  TaskResult,
-} from '@camarada/db';
+export type { MemberContext, Task, TaskEvent, TaskListResult, TaskResult } from '@camarada/db';
+
+/** Foto como o Worker devolve: sem o caminho interno, com URL temporária (ou null se indisponível). */
+export type Photo = Omit<TaskPhoto, 'storage_path'> & { url?: string | null };
+export type TaskDetailsResult = Omit<DbTaskDetails, 'photos'> & { photos?: Photo[] };
+export type PhotoResult = {
+  ok: true;
+  event: string;
+  task: Task;
+  photo: Photo;
+  replayed?: boolean;
+};
 
 export type PersonaIntensity = MemberContext['member']['persona_intensity'];
 export type GuidanceMode = MemberContext['member']['guidance_mode'];
@@ -85,6 +90,8 @@ export interface Api {
     stopRecurrence?: boolean,
   ): Promise<TaskResult>;
   undo(key: string): Promise<TaskResult>;
+  uploadPhoto(taskId: string, file: Blob, caption: string, key: string): Promise<PhotoResult>;
+  deletePhoto(photoId: string, key: string): Promise<PhotoResult>;
 }
 
 export function createApi(
@@ -102,7 +109,8 @@ export function createApi(
       throw new ApiError(401, 'unauthorized');
     }
     const headers: Record<string, string> = { authorization: `Bearer ${token}` };
-    if (body !== undefined) {
+    const isForm = body instanceof FormData;
+    if (body !== undefined && !isForm) {
       headers['content-type'] = 'application/json';
     }
     if (key) {
@@ -113,7 +121,7 @@ export function createApi(
       res = await fetchFn(path, {
         method,
         headers,
-        ...(body !== undefined && { body: JSON.stringify(body) }),
+        ...(body !== undefined && { body: isForm ? body : JSON.stringify(body) }),
       });
     } catch {
       throw new ApiError(0, 'network_error');
@@ -150,6 +158,13 @@ export function createApi(
         key,
       ),
     undo: (key) => request('POST', '/api/undo', undefined, key),
+    uploadPhoto: (taskId, file, caption, key) => {
+      const form = new FormData();
+      form.set('file', file, 'foto');
+      if (caption.trim()) form.set('caption', caption.trim());
+      return request('POST', `/api/tasks/${enc(taskId)}/photos`, form, key);
+    },
+    deletePhoto: (photoId, key) => request('DELETE', `/api/photos/${enc(photoId)}`, undefined, key),
   };
 }
 
@@ -166,6 +181,11 @@ const ERROR_TEXT: Record<string, string> = {
   invalid_assignee: 'Responsável inválido.',
   db_unavailable: 'O banco está indisponível. Tente em instantes.',
   auth_unavailable: 'O login está indisponível. Tente em instantes.',
+  storage_unavailable: 'O arquivo de fotos está indisponível. Tente em instantes.',
+  unsupported_image: 'Formato não suportado. Use JPEG, PNG ou WEBP.',
+  photo_too_large: 'Foto grande demais.',
+  photo_limit: 'Limite de 10 fotos por tarefa.',
+  photo_not_found: 'Foto não encontrada.',
 };
 
 export function errorText(error: unknown): string {
