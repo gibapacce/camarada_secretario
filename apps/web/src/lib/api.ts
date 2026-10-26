@@ -1,0 +1,176 @@
+import type {
+  MemberContext,
+  Task,
+  TaskDetailsResult,
+  TaskListResult,
+  TaskResult,
+} from '@camarada/db';
+
+export type {
+  MemberContext,
+  Task,
+  TaskDetailsResult,
+  TaskEvent,
+  TaskListResult,
+  TaskResult,
+} from '@camarada/db';
+
+export type PersonaIntensity = MemberContext['member']['persona_intensity'];
+export type GuidanceMode = MemberContext['member']['guidance_mode'];
+
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+  ) {
+    super(code);
+  }
+}
+
+export interface ListParams {
+  view: 'open' | 'overdue' | 'due' | 'completed' | 'all';
+  assignee?: string;
+  shared?: boolean;
+  from?: string;
+  to?: string;
+  limit?: number;
+}
+
+export interface RecurrenceInput {
+  frequency: 'daily' | 'weekly' | 'monthly';
+  byWeekday?: number[];
+  dayOfMonth?: number;
+  localTime: string;
+}
+
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  assignedToMemberId?: string | null;
+  dueAt?: string;
+  priority?: Task['priority'];
+  effort?: number;
+  category?: string;
+  room?: string;
+  recurrence?: RecurrenceInput;
+}
+
+export interface TaskChanges {
+  title?: string;
+  description?: string | null;
+  assignedToMemberId?: string | null;
+  dueAt?: string | null;
+  priority?: Task['priority'];
+  effort?: number | null;
+  category?: string | null;
+  room?: string | null;
+}
+
+export type TaskAction = 'complete' | 'reopen' | 'cancel';
+
+export interface Api {
+  me(): Promise<MemberContext>;
+  updatePreferences(p: {
+    personaIntensity?: PersonaIntensity;
+    guidanceMode?: GuidanceMode;
+  }): Promise<unknown>;
+  listTasks(params: ListParams): Promise<TaskListResult>;
+  getTask(id: string): Promise<TaskDetailsResult>;
+  createTask(input: CreateTaskInput, key: string): Promise<TaskResult>;
+  updateTask(id: string, changes: TaskChanges, key: string): Promise<TaskResult>;
+  taskAction(
+    id: string,
+    action: TaskAction,
+    key: string,
+    stopRecurrence?: boolean,
+  ): Promise<TaskResult>;
+  undo(key: string): Promise<TaskResult>;
+}
+
+export function createApi(
+  getToken: () => Promise<string | null>,
+  fetchFn: typeof fetch = fetch,
+): Api {
+  async function request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    key?: string,
+  ): Promise<T> {
+    const token = await getToken();
+    if (!token) {
+      throw new ApiError(401, 'unauthorized');
+    }
+    const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+    if (body !== undefined) {
+      headers['content-type'] = 'application/json';
+    }
+    if (key) {
+      headers['idempotency-key'] = key;
+    }
+    let res: Response;
+    try {
+      res = await fetchFn(path, {
+        method,
+        headers,
+        ...(body !== undefined && { body: JSON.stringify(body) }),
+      });
+    } catch {
+      throw new ApiError(0, 'network_error');
+    }
+    const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+    if (!res.ok || data?.ok === false) {
+      throw new ApiError(res.status, data?.error ?? 'unexpected_error');
+    }
+    return data as T;
+  }
+
+  const enc = encodeURIComponent;
+
+  return {
+    me: () => request('GET', '/api/me'),
+    updatePreferences: (p) => request('PATCH', '/api/me/preferences', p),
+    listTasks: (p) => {
+      const q = new URLSearchParams({ view: p.view });
+      if (p.assignee) q.set('assignee', p.assignee);
+      if (p.shared) q.set('shared', 'true');
+      if (p.from) q.set('from', p.from);
+      if (p.to) q.set('to', p.to);
+      if (p.limit) q.set('limit', String(p.limit));
+      return request('GET', `/api/tasks?${q.toString()}`);
+    },
+    getTask: (id) => request('GET', `/api/tasks/${enc(id)}`),
+    createTask: (input, key) => request('POST', '/api/tasks', input, key),
+    updateTask: (id, changes, key) => request('PATCH', `/api/tasks/${enc(id)}`, { changes }, key),
+    taskAction: (id, action, key, stopRecurrence) =>
+      request(
+        'POST',
+        `/api/tasks/${enc(id)}/${action}`,
+        action === 'cancel' ? { stopRecurrence: stopRecurrence === true } : undefined,
+        key,
+      ),
+    undo: (key) => request('POST', '/api/undo', undefined, key),
+  };
+}
+
+const ERROR_TEXT: Record<string, string> = {
+  network_error: 'Sem conexão com o servidor.',
+  unauthorized: 'Sua sessão expirou. Entre de novo.',
+  not_a_member: 'Este login não está ligado a nenhuma casa.',
+  task_not_found: 'Tarefa não encontrada.',
+  task_cancelled: 'A tarefa está cancelada.',
+  task_completed: 'A tarefa já foi concluída.',
+  nothing_to_undo: 'Não há ação recente para desfazer.',
+  undo_conflict: 'Outra pessoa mexeu nessa tarefa depois; não dá para desfazer.',
+  invalid_input: 'Dados inválidos. Confira os campos.',
+  invalid_assignee: 'Responsável inválido.',
+  db_unavailable: 'O banco está indisponível. Tente em instantes.',
+  auth_unavailable: 'O login está indisponível. Tente em instantes.',
+};
+
+export function errorText(error: unknown): string {
+  if (error instanceof ApiError) {
+    return ERROR_TEXT[error.code] ?? 'Erro inesperado.';
+  }
+  return 'Erro inesperado.';
+}

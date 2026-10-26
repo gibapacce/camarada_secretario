@@ -11,17 +11,18 @@ backend valida e executa. A persona é apenas camada de apresentação.
 
 ## Estado atual
 
-| Fase                       | Situação                                                 |
-| -------------------------- | -------------------------------------------------------- |
-| 0 Viabilidade e decisões   | ✅ Concluída                                             |
-| 1 Esqueleto e documentação | ✅ Concluída                                             |
-| 2 Banco e regras           | ✅ Concluída (local, PGlite)                             |
-| 3 Painel web               | 🔧 Em andamento: API autenticada pronta; painel a seguir |
+| Fase                       | Situação                                                        |
+| -------------------------- | --------------------------------------------------------------- |
+| 0 Viabilidade e decisões   | ✅ Concluída                                                    |
+| 1 Esqueleto e documentação | ✅ Concluída                                                    |
+| 2 Banco e regras           | ✅ Concluída (local, PGlite)                                    |
+| 3 Painel web               | ✅ Concluída localmente (fotos na Fase 4; publicação na Fase 9) |
 
 O projeto Supabase (plano Free, São Paulo) existe e tem as migrations aplicadas, sem o seed. Cadastro
 público desligado, chave de assinatura ES256. O Worker ainda roda só localmente (`wrangler dev`).
-Para aplicar migrations novas: `npx supabase@latest db push --db-url <url>`. Cuidado: o `npx` repete
-o comando na tela, então a senha dentro da URL aparece na saída e no log do npm.
+Para aplicar migrations novas, rode o executável do Supabase CLI diretamente
+(`supabase.exe db push --db-url <url>`). Não use `npx supabase ...` com a senha na URL: o npm 12
+repete o comando na tela e no log.
 
 ## Estrutura
 
@@ -63,8 +64,9 @@ Para desenvolver só o painel com recarga automática: `npm run dev -w apps/web`
 
 ### Segredos locais
 
-Copie [.env.example](.env.example) para `apps/worker/.dev.vars` e preencha apenas o necessário.
-Esse arquivo é ignorado pelo Git. Nunca coloque segredos no código, no painel ou no chat.
+Copie [.env.example](.env.example) para `apps/worker/.dev.vars` (Worker) e `apps/web/.env.local`
+(painel) e preencha apenas o necessário. Os dois arquivos são ignorados pelo Git. Nunca coloque
+segredos no código, no painel ou no chat. O painel só recebe a chave publicável (`sb_publishable_`).
 
 ### Scripts de instalação
 

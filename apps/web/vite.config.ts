@@ -16,5 +16,7 @@ export default defineConfig({
     environment: 'jsdom',
     // Forks com jsdom estouravam o tempo de inicialização no Windows; threads é estável.
     pool: 'threads',
+    // Workers iniciando em paralelo ainda estouravam os 60 s fixos do Vitest em máquina fria.
+    fileParallelism: false,
   },
 });

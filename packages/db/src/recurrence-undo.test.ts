@@ -223,7 +223,7 @@ describe('desfazer', () => {
 
   async function eventTypes(taskId: string) {
     const res = await pg.query<{ event_type: string }>(
-      'select event_type from task_events where task_id = $1 order by created_at',
+      'select event_type from task_events where task_id = $1 order by seq',
       [taskId],
     );
     return res.rows.map((r) => r.event_type);
@@ -320,6 +320,21 @@ describe('desfazer', () => {
       actorMemberId: f.memberId,
       taskId: task.id,
     });
+    expect(await svc.undoLastAction(scope())).toMatchObject({ ok: false, error: 'undo_conflict' });
+  });
+
+  it('detecta a alteração de outra pessoa mesmo com horários empatados', async () => {
+    const task = okTask(await svc.createTask({ ...scope(), title: 'Mesmo instante' }));
+    await svc.completeTask({
+      householdId: f.householdId,
+      actorMemberId: f.memberId,
+      taskId: task.id,
+    });
+    await pg.query(
+      `update task_events set created_at = (select min(created_at) from task_events where task_id = $1)
+       where task_id = $1`,
+      [task.id],
+    );
     expect(await svc.undoLastAction(scope())).toMatchObject({ ok: false, error: 'undo_conflict' });
   });
 

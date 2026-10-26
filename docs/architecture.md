@@ -82,6 +82,7 @@ novas para continuar compatível com o Supabase.
 - É um evento compensatório `undone` no histórico; nada é apagado. Desfazer uma criação cancela a
   tarefa (e encerra a série, se recorrente).
 - Se outra pessoa alterou a mesma tarefa depois, o resultado é `undo_conflict` (nada muda).
+  "Depois" usa a sequência `task_events.seq`, não o horário: carimbos de tempo podem empatar.
 - Desfazer uma conclusão recorrente cancela a próxima ocorrência gerada, se ninguém mexeu nela.
 
 ### Pendências conhecidas
@@ -112,6 +113,27 @@ do Supabase; o navegador nunca a recebe.
   403 não é membro, 404 tarefa de outra casa ou inexistente, 409 conflito de negócio,
   413/415 corpo inválido (limite de 16 KB), 503 banco ou chaves de autenticação indisponíveis.
   Erros inesperados viram 500 genérico, sem detalhes internos.
+
+## Painel web (Fase 3)
+
+- **Login:** e-mail e senha pelo Supabase Auth (`@supabase/auth-js`, só o módulo de autenticação).
+  A sessão fica no `localStorage` com renovação automática; o painel só conhece a chave
+  publicável. Todo dado passa pela API do Worker.
+- **Páginas:** resumo (`/`), lista com filtros (`/tarefas`), nova tarefa (`/tarefas/nova`),
+  detalhes com ações e histórico (`/tarefas/:id`), calendário semanal/mensal (`/calendario`) e
+  preferências (`/preferencias`). Roteamento próprio (History API), sem biblioteca.
+- **Fuso:** datas exibidas e digitadas no fuso da casa (`households.timezone`), convertidas para
+  UTC antes de enviar. Prazo sem hora vira 23:59 do dia; sem data, a tarefa fica sem prazo.
+- **Ações:** cada clique gera um `Idempotency-Key` novo; os botões ficam desabilitados durante a
+  operação. O aviso mostra o título exato e oferece "Desfazer" (usa `POST /api/undo`). Em erro, o
+  aviso diz que nada foi registrado.
+- **Persona:** rótulos e avisos vêm de `@camarada/persona` (`panelText`, `actionMessage`).
+  Em `off` os textos são neutros e o mascote some; assuntos sensíveis (saúde, luto, dívidas) usam
+  tom neutro em qualquer nível.
+- **Segurança:** `apps/web/public/_headers` define CSP (`connect-src 'self' https://*.supabase.co`,
+  sem scripts ou estilos inline), `frame-ancestors 'none'`, `nosniff` e `Referrer-Policy`.
+- **Validado no navegador** com o Supabase real (26/10/2026): login, resumo, criar com acentos,
+  concluir, desfazer, calendário, modo sério e cabeçalhos de segurança.
 
 ## Por que não WhatsApp (por enquanto)
 

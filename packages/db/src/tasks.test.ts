@@ -42,7 +42,7 @@ async function create(
 
 async function events(taskId: string) {
   const res = await pg.query<{ event_type: string; actor_member_id: string | null }>(
-    'select event_type, actor_member_id from task_events where task_id = $1 order by created_at',
+    'select event_type, actor_member_id from task_events where task_id = $1 order by seq',
     [taskId],
   );
   return res.rows;
