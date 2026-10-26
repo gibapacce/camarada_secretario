@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+.wrangler/
+package-lock.json
+apps/worker/worker-configuration.d.ts
+docs/plano_assistente_domestico_ia.md

@@ -1,0 +1,19 @@
+{
+  "name": "@camarada/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "cf-typegen": "wrangler types",
+    "typecheck": "wrangler types && tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@camarada/persona": "0.0.0",
+    "@camarada/shared": "0.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.152.0"
+  }
+}
