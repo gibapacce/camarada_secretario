@@ -3,7 +3,7 @@ import { TaskList } from '../components/TaskList.tsx';
 import { errorText } from '../lib/api.ts';
 import { useApp, useLoad } from '../lib/app-context.ts';
 import { Link } from '../lib/router.tsx';
-import { addDays, dayStartUtc, startOfWeek, todayKey } from '../lib/time.ts';
+import { addDays, dayStartUtc, startOfWeek, todayKey } from '@camarada/shared';
 
 export function SummaryPage() {
   const { api, me, text, tz, version } = useApp();

@@ -10,6 +10,7 @@
     "packages/shared",
     "packages/persona",
     "packages/db",
+    "packages/assistant",
     "apps/web",
     "apps/worker"
   ],

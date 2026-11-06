@@ -2,7 +2,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import type { Photo } from '../lib/api.ts';
 import { useApp } from '../lib/app-context.ts';
 import { prepareImage } from '../lib/image.ts';
-import { formatDateTime } from '../lib/time.ts';
+import { formatDateTime } from '@camarada/shared';
 
 const MAX_PHOTOS = 10;
 

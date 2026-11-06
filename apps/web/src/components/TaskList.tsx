@@ -1,7 +1,7 @@
 import type { Task } from '../lib/api.ts';
 import { useApp } from '../lib/app-context.ts';
 import { Link } from '../lib/router.tsx';
-import { formatDateTime } from '../lib/time.ts';
+import { formatDateTime } from '@camarada/shared';
 
 const PRIORITY_LABEL: Record<Task['priority'], string> = {
   low: 'Baixa',

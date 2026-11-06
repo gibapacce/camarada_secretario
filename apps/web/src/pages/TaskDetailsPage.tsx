@@ -5,7 +5,7 @@ import { TaskForm } from '../components/TaskForm.tsx';
 import { errorText, type TaskEvent } from '../lib/api.ts';
 import { useApp, useLoad } from '../lib/app-context.ts';
 import { Link } from '../lib/router.tsx';
-import { formatDateTime } from '../lib/time.ts';
+import { formatDateTime } from '@camarada/shared';
 
 const EVENT_LABEL: Record<TaskEvent['event_type'], string> = {
   created: 'criou',

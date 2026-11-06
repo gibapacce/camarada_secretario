@@ -11,6 +11,8 @@ export const DB_FUNCTIONS = [
   'update_member_preferences',
   'add_task_photo',
   'delete_task_photo',
+  'get_assistant_state',
+  'set_assistant_state',
 ] as const;
 export type DbFunction = (typeof DB_FUNCTIONS)[number];
 

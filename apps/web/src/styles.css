@@ -625,6 +625,51 @@ fieldset {
   text-decoration: line-through;
 }
 
+/* Conversa */
+.chat-log {
+  list-style: none;
+  padding: 0.75rem;
+  margin: 0 0 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 12rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.chat-msg {
+  max-width: 85%;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-me {
+  align-self: flex-end;
+  background: var(--red-700);
+  color: #fff;
+}
+
+.chat-bot {
+  align-self: flex-start;
+  background: var(--gold-100);
+  border: 1px solid var(--line);
+}
+
+.chat-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chat-form input {
+  flex: 1;
+}
+
 /* Avisos */
 .toast-region {
   position: fixed;

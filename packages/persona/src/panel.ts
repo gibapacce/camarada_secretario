@@ -1,10 +1,12 @@
 import type { PersonaIntensity } from './index.ts';
 
 export interface PanelText {
-  nav: { summary: string; tasks: string; calendar: string; preferences: string };
+  nav: { summary: string; tasks: string; calendar: string; chat: string; preferences: string };
   summaryTitle: string;
   tasksTitle: string;
   calendarTitle: string;
+  chatTitle: string;
+  chatIntro: string;
   preferencesTitle: string;
   historyTitle: string;
   photosTitle: string;
@@ -17,10 +19,19 @@ export interface PanelText {
 }
 
 const NEUTRAL: PanelText = {
-  nav: { summary: 'Resumo', tasks: 'Tarefas', calendar: 'Calendário', preferences: 'Preferências' },
+  nav: {
+    summary: 'Resumo',
+    tasks: 'Tarefas',
+    calendar: 'Calendário',
+    chat: 'Conversar',
+    preferences: 'Preferências',
+  },
   summaryTitle: 'Resumo',
   tasksTitle: 'Tarefas',
   calendarTitle: 'Calendário',
+  chatTitle: 'Conversar',
+  chatIntro:
+    'Escreva como no chat. Ex.: "nova tarefa: lavar a louça amanhã às 20h", "pendentes", "feito 1".',
   preferencesTitle: 'Preferências',
   historyTitle: 'Histórico',
   photosTitle: 'Fotos',
@@ -42,11 +53,15 @@ const THEMED: PanelText = {
     summary: 'Assembleia',
     tasks: 'Plano Quinquenal',
     calendar: 'Calendário',
+    chat: 'Falar com o Camarada',
     preferences: 'Comitê',
   },
   summaryTitle: 'Assembleia Geral',
   tasksTitle: 'Plano Quinquenal',
   calendarTitle: 'Calendário da Revolução',
+  chatTitle: 'Falar com o Camarada',
+  chatIntro:
+    'Fale como no chat, camarada. Ex.: "nova tarefa: lavar a louça amanhã às 20h", "pendentes", "feito 1".',
   preferencesTitle: 'Comitê de Preferências',
   historyTitle: 'Anais do Coletivo',
   photosTitle: 'Arquivo Nacional',
@@ -139,4 +154,29 @@ export function actionMessage(
 export function failureMessage(intensity: PersonaIntensity): string {
   const base = 'Não consegui concluir a operação. Nada foi registrado.';
   return intensity === 'full' ? `😿 ${base} (O imperialismo da internet ataca outra vez.)` : base;
+}
+
+const ERROR_TEXT: Record<string, string> = {
+  network_error: 'Sem conexão com o servidor.',
+  unauthorized: 'Sua sessão expirou. Entre de novo.',
+  not_a_member: 'Este login não está ligado a nenhuma casa.',
+  task_not_found: 'Tarefa não encontrada.',
+  task_cancelled: 'A tarefa está cancelada.',
+  task_completed: 'A tarefa já foi concluída.',
+  nothing_to_undo: 'Não há ação recente para desfazer.',
+  undo_conflict: 'Outra pessoa mexeu nessa tarefa depois; não dá para desfazer.',
+  invalid_input: 'Dados inválidos. Confira os campos.',
+  invalid_assignee: 'Responsável inválido.',
+  db_unavailable: 'O banco está indisponível. Tente em instantes.',
+  auth_unavailable: 'O login está indisponível. Tente em instantes.',
+  storage_unavailable: 'O arquivo de fotos está indisponível. Tente em instantes.',
+  unsupported_image: 'Formato não suportado. Use JPEG, PNG ou WEBP.',
+  photo_too_large: 'Foto grande demais.',
+  photo_limit: 'Limite de 10 fotos por tarefa.',
+  photo_not_found: 'Foto não encontrada.',
+};
+
+/** Texto curto e sem detalhes internos para um código de erro estável. */
+export function errorMessage(code: string): string {
+  return ERROR_TEXT[code] ?? 'Erro inesperado.';
 }

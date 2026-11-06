@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --show-interactive-dev-session=false",
     "cf-typegen": "wrangler types",
     "typecheck": "wrangler types && tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@camarada/assistant": "0.0.0",
     "@camarada/db": "0.0.0",
     "@camarada/persona": "0.0.0",
     "@camarada/shared": "0.0.0",

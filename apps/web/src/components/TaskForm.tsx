@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { CreateTaskInput, Task, TaskChanges } from '../lib/api.ts';
 import { useApp } from '../lib/app-context.ts';
-import { utcToZonedInput, zonedToUtcIso } from '../lib/time.ts';
+import { utcToZonedInput, zonedToUtcIso } from '@camarada/shared';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 

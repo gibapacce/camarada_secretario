@@ -1,5 +1,7 @@
+import { createAssistant, createWorkersAiModel, type AiBinding } from '@camarada/assistant';
 import {
   PostgrestDbClient,
+  createAssistantStateStore,
   createMemberService,
   createPhotoService,
   createTaskService,
@@ -14,6 +16,8 @@ export interface Env {
   SUPABASE_URL?: string;
   SUPABASE_SECRET_KEY?: string;
   PHOTO_MAX_BYTES?: string;
+  /** Workers AI (opcional): sem o binding, o assistente funciona só com regras. */
+  AI?: AiBinding;
 }
 
 /** Sem SUPABASE_URL/SUPABASE_SECRET_KEY a API responde 503 (exceto /api/health). */
@@ -23,14 +27,22 @@ export function buildDeps(env: Env): ApiDeps | null {
   }
   const db = new PostgrestDbClient({ url: env.SUPABASE_URL, serviceKey: env.SUPABASE_SECRET_KEY });
   const maxPhotoBytes = Number(env.PHOTO_MAX_BYTES);
+  const tasks = createTaskService(db);
+  const members = createMemberService(db);
   return {
-    tasks: createTaskService(db),
-    members: createMemberService(db),
+    tasks,
+    members,
     photos: createPhotoService(db),
     storage: new SupabaseStorage({
       url: env.SUPABASE_URL,
       serviceKey: env.SUPABASE_SECRET_KEY,
       bucket: 'task-photos',
+    }),
+    assistant: createAssistant({
+      tasks,
+      members,
+      state: createAssistantStateStore(db),
+      model: env.AI ? createWorkersAiModel({ binding: env.AI }) : null,
     }),
     verifyToken: getTokenVerifier(env.SUPABASE_URL),
     ...(Number.isInteger(maxPhotoBytes) && maxPhotoBytes > 0 && { maxPhotoBytes }),

@@ -6,6 +6,7 @@ import type {
   TaskPhoto,
   TaskResult,
 } from '@camarada/db';
+import { errorMessage } from '@camarada/persona';
 
 export type { MemberContext, Task, TaskEvent, TaskListResult, TaskResult } from '@camarada/db';
 
@@ -92,6 +93,7 @@ export interface Api {
   undo(key: string): Promise<TaskResult>;
   uploadPhoto(taskId: string, file: Blob, caption: string, key: string): Promise<PhotoResult>;
   deletePhoto(photoId: string, key: string): Promise<PhotoResult>;
+  assistant(text: string, key: string): Promise<{ ok: true; reply: string; changed: boolean }>;
 }
 
 export function createApi(
@@ -165,32 +167,10 @@ export function createApi(
       return request('POST', `/api/tasks/${enc(taskId)}/photos`, form, key);
     },
     deletePhoto: (photoId, key) => request('DELETE', `/api/photos/${enc(photoId)}`, undefined, key),
+    assistant: (text, key) => request('POST', '/api/assistant', { text }, key),
   };
 }
 
-const ERROR_TEXT: Record<string, string> = {
-  network_error: 'Sem conexão com o servidor.',
-  unauthorized: 'Sua sessão expirou. Entre de novo.',
-  not_a_member: 'Este login não está ligado a nenhuma casa.',
-  task_not_found: 'Tarefa não encontrada.',
-  task_cancelled: 'A tarefa está cancelada.',
-  task_completed: 'A tarefa já foi concluída.',
-  nothing_to_undo: 'Não há ação recente para desfazer.',
-  undo_conflict: 'Outra pessoa mexeu nessa tarefa depois; não dá para desfazer.',
-  invalid_input: 'Dados inválidos. Confira os campos.',
-  invalid_assignee: 'Responsável inválido.',
-  db_unavailable: 'O banco está indisponível. Tente em instantes.',
-  auth_unavailable: 'O login está indisponível. Tente em instantes.',
-  storage_unavailable: 'O arquivo de fotos está indisponível. Tente em instantes.',
-  unsupported_image: 'Formato não suportado. Use JPEG, PNG ou WEBP.',
-  photo_too_large: 'Foto grande demais.',
-  photo_limit: 'Limite de 10 fotos por tarefa.',
-  photo_not_found: 'Foto não encontrada.',
-};
-
 export function errorText(error: unknown): string {
-  if (error instanceof ApiError) {
-    return ERROR_TEXT[error.code] ?? 'Erro inesperado.';
-  }
-  return 'Erro inesperado.';
+  return errorMessage(error instanceof ApiError ? error.code : 'unexpected_error');
 }

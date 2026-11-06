@@ -138,6 +138,9 @@ function fakeApi(intensity: PersonaIntensity = 'full') {
         },
       }),
     ),
+    assistant: vi.fn((text: string, _key: string) =>
+      ok({ reply: `Eco: ${text}`, changed: text.startsWith('tarefa') }),
+    ),
   } satisfies Api;
 }
 
@@ -315,5 +318,19 @@ describe('App', () => {
       'O arquivo precisa ser uma imagem.',
     );
     expect(api.uploadPhoto).not.toHaveBeenCalled();
+  });
+
+  it('conversa com o assistente e recarrega os dados quando algo muda', async () => {
+    const api = fakeApi('full');
+    renderApp({ auth: fakeAuth(true), api }, '/conversar');
+    expect(await screen.findByRole('heading', { name: 'Falar com o Camarada' })).toBeDefined();
+    const meCalls = api.me.mock.calls.length;
+    fireEvent.change(screen.getByLabelText('Mensagem'), { target: { value: 'tarefa: varrer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    expect(await screen.findByText('Eco: tarefa: varrer')).toBeDefined();
+    const [text, key] = api.assistant.mock.calls[0] ?? [];
+    expect(text).toBe('tarefa: varrer');
+    expect(key).toMatch(UUID_RE);
+    await waitFor(() => expect(api.me.mock.calls.length).toBeGreaterThan(meCalls));
   });
 });

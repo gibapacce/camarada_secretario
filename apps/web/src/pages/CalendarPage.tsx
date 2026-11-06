@@ -12,7 +12,7 @@ import {
   startOfMonth,
   startOfWeek,
   todayKey,
-} from '../lib/time.ts';
+} from '@camarada/shared';
 
 const WEEKDAY_HEADERS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 

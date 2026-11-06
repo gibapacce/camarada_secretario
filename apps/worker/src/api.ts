@@ -1,3 +1,4 @@
+import type { Assistant } from '@camarada/assistant';
 import {
   DomainError,
   TASK_VIEWS,
@@ -17,6 +18,7 @@ export interface ApiDeps {
   members: MemberService;
   photos: PhotoService;
   storage: PhotoStorage;
+  assistant: Assistant;
   verifyToken: TokenVerifier;
   maxPhotoBytes?: number;
 }
@@ -335,6 +337,21 @@ const routes: Route[] = [
           await removeQuietly(deps.storage, [r.photo.storage_path]);
         }
         return result(publicPhotoResult(r));
+      },
+    },
+  },
+  {
+    pattern: /^\/api\/assistant$/,
+    methods: {
+      POST: async ({ request, deps, member }) => {
+        const key = idempotencyKey(request);
+        const body = await readJson(request);
+        const text = typeof body.text === 'string' ? body.text.trim() : '';
+        if (!text || text.length > 1000) {
+          throw new HttpError('invalid_input');
+        }
+        const r = await deps.assistant.handle({ member, text, key });
+        return json({ ok: true, reply: r.reply, changed: r.changed });
       },
     },
   },

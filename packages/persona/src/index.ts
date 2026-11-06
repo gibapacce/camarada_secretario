@@ -11,6 +11,7 @@ export function isPersonaIntensity(value: unknown): value is PersonaIntensity {
 
 export {
   actionMessage,
+  errorMessage,
   failureMessage,
   isSensitive,
   panelText,

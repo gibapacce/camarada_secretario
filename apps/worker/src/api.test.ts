@@ -1,6 +1,8 @@
 import type { PGlite } from '@electric-sql/pglite';
+import { createAssistant } from '@camarada/assistant';
 import {
   DomainError,
+  createAssistantStateStore,
   createMemberService,
   createPhotoService,
   createTaskService,
@@ -47,11 +49,14 @@ beforeAll(async () => {
   foreignKey = (await generateKeyPair('ES256')).privateKey;
   const jwk = { ...(await exportJWK(pair.publicKey)), kid: 'k1', alg: 'ES256' };
   storage = new MemoryStorage();
+  const tasks = createTaskService(db);
+  const members = createMemberService(db);
   deps = {
-    tasks: createTaskService(db),
-    members: createMemberService(db),
+    tasks,
+    members,
     photos: createPhotoService(db),
     storage,
+    assistant: createAssistant({ tasks, members, state: createAssistantStateStore(db) }),
     maxPhotoBytes: 1024,
     verifyToken: createTokenVerifier({
       supabaseUrl: SUPABASE_URL,
@@ -483,5 +488,42 @@ describe('fotos', () => {
     const del = await call('DELETE', `/api/photos/${photoId}`, { as: users.pedro });
     expect(del.body).toMatchObject({ ok: true, event: 'photo_removed', task: { photo_count: 0 } });
     expect(storage.objects.size).toBe(0);
+  });
+});
+
+describe('assistente', () => {
+  it('conversa com dados reais da casa de quem está logado', async () => {
+    const created = await call('POST', '/api/assistant', {
+      as: users.ana,
+      body: { text: 'Nova tarefa: regar plantas pra Pedro' },
+    });
+    expect(created.body).toMatchObject({ ok: true, changed: true });
+    expect(created.body.reply).toContain('"Regar plantas"');
+
+    const list = await call('POST', '/api/assistant', {
+      as: users.pedro,
+      body: { text: 'comigo' },
+    });
+    expect(list.body.reply).toContain('1) Regar plantas — Pedro');
+
+    const outsider = await call('POST', '/api/assistant', {
+      as: users.outsider,
+      body: { text: 'pendentes' },
+    });
+    expect(outsider.body.reply).not.toContain('Regar plantas');
+  });
+
+  it('valida a mensagem e exige chave de idempotência', async () => {
+    expect(
+      (await call('POST', '/api/assistant', { as: users.ana, body: { text: '' } })).status,
+    ).toBe(400);
+    expect(
+      (await call('POST', '/api/assistant', { as: users.ana, body: { text: 'x'.repeat(1001) } }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await call('POST', '/api/assistant', { as: users.ana, key: null, body: { text: 'ajuda' } }))
+        .status,
+    ).toBe(400);
   });
 });
