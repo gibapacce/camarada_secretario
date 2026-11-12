@@ -184,6 +184,46 @@ describe('autenticação', () => {
 });
 
 describe('perfil', () => {
+  it('gera código de vinculação do Telegram, com link só quando o bot é conhecido', async () => {
+    const plain = await call('POST', '/api/me/telegram', { as: users.ana, key: null });
+    expect(plain.status).toBe(200);
+    expect(plain.body).toMatchObject({ ok: true, expires_in_minutes: 15 });
+    expect(plain.body.code).toMatch(/^[0-9A-F]{12}$/);
+    expect(plain.body.link).toBeUndefined();
+
+    const res = await handleApi(
+      new Request('http://localhost/api/me/telegram', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${await token(users.ana)}` },
+      }),
+      { ...deps, telegramBotUsername: 'camarada_bot' },
+    );
+    const body = (await res.json()) as { code: string; link: string };
+    expect(body.link).toBe(`https://t.me/camarada_bot?start=${body.code}`);
+  });
+
+  it('mostra se o Telegram está vinculado e permite desvincular', async () => {
+    const { body } = await call('POST', '/api/me/telegram', { as: users.pedro, key: null });
+    await deps.members.linkTelegram({
+      code: body.code,
+      telegramUserId: 7_000_000_002,
+      chatId: 7_000_000_002,
+    });
+    expect((await call('GET', '/api/me', { as: users.pedro })).body.member.telegram_linked).toBe(
+      true,
+    );
+    expect((await call('DELETE', '/api/me/telegram', { as: users.pedro, key: null })).status).toBe(
+      200,
+    );
+    expect((await call('GET', '/api/me', { as: users.pedro })).body.member.telegram_linked).toBe(
+      false,
+    );
+  });
+
+  it('exige login para gerar o código', async () => {
+    expect((await call('POST', '/api/me/telegram', { key: null })).status).toBe(401);
+  });
+
   it('retorna a pessoa, a casa e os membros ativos', async () => {
     const { status, body } = await call('GET', '/api/me', { as: users.ana });
     expect(status).toBe(200);

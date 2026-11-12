@@ -32,6 +32,7 @@ export {
   type MemberContext,
   type MemberService,
   type PersonaIntensity,
+  type TelegramLinkResult,
 } from './members.ts';
 export {
   PHOTO_TYPES,

@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { errorText, type GuidanceMode, type PersonaIntensity } from '../lib/api.ts';
+import {
+  errorText,
+  type GuidanceMode,
+  type PersonaIntensity,
+  type TelegramLink,
+} from '../lib/api.ts';
 import { useApp } from '../lib/app-context.ts';
 
 const INTENSITIES: { value: PersonaIntensity; label: string; hint: string }[] = [
@@ -68,9 +73,89 @@ export function PreferencesPage() {
         </label>
       </fieldset>
 
+      <TelegramSection />
+
       <p role="status" aria-live="polite">
         {status}
       </p>
     </section>
+  );
+}
+
+function TelegramSection() {
+  const { api, me, refresh } = useApp();
+  const [link, setLink] = useState<TelegramLink | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const linked = me.member.telegram_linked;
+
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <fieldset className="card" disabled={busy}>
+      <legend>Telegram</legend>
+      {linked ? (
+        <>
+          <p>Seu Telegram está vinculado. Converse com o bot por lá.</p>
+          <button
+            type="button"
+            className="btn"
+            onClick={() =>
+              void run(async () => {
+                await api.unlinkTelegram();
+                setLink(null);
+                refresh();
+              })
+            }
+          >
+            Desvincular
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="muted">
+            Gere um código e envie ao bot no Telegram. O código vale por 15 minutos e só pode ser
+            usado uma vez.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => void run(async () => setLink(await api.createTelegramLink()))}
+          >
+            Gerar código
+          </button>
+          {link && (
+            <p role="status">
+              Envie ao bot: <strong>/start {link.code}</strong>
+              {link.link && (
+                <>
+                  {' '}
+                  ou{' '}
+                  <a href={link.link} target="_blank" rel="noreferrer noopener">
+                    abra o bot com o código já preenchido
+                  </a>
+                </>
+              )}
+              .
+            </p>
+          )}
+        </>
+      )}
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+    </fieldset>
   );
 }

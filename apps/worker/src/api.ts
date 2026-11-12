@@ -21,6 +21,8 @@ export interface ApiDeps {
   assistant: Assistant;
   verifyToken: TokenVerifier;
   maxPhotoBytes?: number;
+  /** Nome público do bot, para o link de vinculação. */
+  telegramBotUsername?: string;
 }
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -219,6 +221,22 @@ const routes: Route[] = [
     methods: {
       PATCH: async ({ request, deps, member }) =>
         result(await deps.members.updatePreferences(scopeOf(member), await readJson(request))),
+    },
+  },
+  {
+    pattern: /^\/api\/me\/telegram$/,
+    methods: {
+      // Gera o código de vinculação (15 min). O código só aparece nesta resposta.
+      POST: async ({ deps, member }) => {
+        const r = await deps.members.createTelegramLinkCode(scopeOf(member));
+        const bot = deps.telegramBotUsername;
+        return json({
+          ...r,
+          ...(bot && { link: `https://t.me/${bot}?start=${r.code}`, bot }),
+        });
+      },
+      DELETE: async ({ deps, member }) =>
+        result(await deps.members.unlinkTelegram(scopeOf(member))),
     },
   },
   {

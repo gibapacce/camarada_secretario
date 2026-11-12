@@ -21,6 +21,7 @@ export interface MemberContext {
     tutorial_paused: boolean;
     /** Dicas e avisos já mostrados a esta pessoa. */
     tips_seen: string[];
+    telegram_linked: boolean;
   };
   household: { id: string; name: string; timezone: string };
   members: { id: string; display_name: string; role: 'owner' | 'member' }[];
@@ -40,8 +41,68 @@ export const trainingSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('tip'), tip: z.string().regex(/^[a-z_]{1,40}$/) }),
 ]);
 
+export type TelegramLinkResult =
+  | {
+      ok: true;
+      event: 'telegram_linked';
+      member: { id: string; household_id: string; display_name: string };
+    }
+  | { ok: false; error: 'invalid_code' | 'telegram_already_linked' };
+
+const telegramIds = z.object({
+  telegramUserId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  chatId: z.number().int().max(Number.MAX_SAFE_INTEGER),
+});
+
 export function createMemberService(db: DbClient) {
   return {
+    /** Contexto do membro ativo ligado a um usuário do Telegram, ou null. */
+    async getContextByTelegram(telegramUserId: number): Promise<MemberContext | null> {
+      if (!telegramIds.shape.telegramUserId.safeParse(telegramUserId).success) {
+        return null;
+      }
+      const result = (await db.call('get_member_context_by_telegram', {
+        p_telegram_user_id: telegramUserId,
+      })) as MemberContext | { ok: false };
+      return result.ok ? result : null;
+    },
+
+    /** Gera um código de uso único (15 min) para a pessoa vincular o seu Telegram. */
+    async createTelegramLinkCode(scope: {
+      householdId: string;
+      actorMemberId: string;
+    }): Promise<{ ok: true; code: string; expires_in_minutes: number }> {
+      return (await db.call('create_telegram_link_code', {
+        p_household_id: scope.householdId,
+        p_actor_member_id: scope.actorMemberId,
+      })) as { ok: true; code: string; expires_in_minutes: number };
+    },
+
+    /** Usa o código recebido pelo bot. Códigos inválidos ou vencidos viram `invalid_code`. */
+    async linkTelegram(input: {
+      code: string;
+      telegramUserId: number;
+      chatId: number;
+    }): Promise<TelegramLinkResult> {
+      const ids = telegramIds.safeParse(input);
+      const code = input.code.trim();
+      if (!ids.success || !/^[A-Za-z0-9]{6,40}$/.test(code)) {
+        return { ok: false, error: 'invalid_code' };
+      }
+      return (await db.call('link_telegram_member', {
+        p_code: code,
+        p_telegram_user_id: ids.data.telegramUserId,
+        p_telegram_chat_id: ids.data.chatId,
+      })) as TelegramLinkResult;
+    },
+
+    async unlinkTelegram(scope: { householdId: string; actorMemberId: string }): Promise<unknown> {
+      return db.call('unlink_telegram_member', {
+        p_household_id: scope.householdId,
+        p_actor_member_id: scope.actorMemberId,
+      });
+    },
+
     /** Retorna o contexto do membro ativo ligado ao usuário autenticado, ou null. */
     async getContext(authUserId: string): Promise<MemberContext | null> {
       if (!z.uuid().safeParse(authUserId).success) {

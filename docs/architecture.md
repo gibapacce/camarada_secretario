@@ -159,6 +159,20 @@ do Supabase; o navegador nunca a recebe.
   sem acesso por endereço público, chave pública, login do usuário ou token adulterado, arquivo
   falso recusado, outra casa sem acesso e remoção apagando o arquivo.
 
+## Telegram (Fase 7)
+
+- **Canal e painel convivem:** o painel continua como acesso visual; o bot manda o link no comando
+  `/painel`. O assistente é o mesmo nos dois canais (chave `web:<id>` ou `telegram:<chat>:<id>`).
+- **Entrada:** `POST /telegram/webhook`, fora de `/api`, protegida pelo cabeçalho
+  `X-Telegram-Bot-Api-Secret-Token` (comparação em tempo constante). Só mensagens de chat privado
+  de pessoas vinculadas chegam ao assistente.
+- **Vinculação:** código de 12 caracteres hexadecimais, 15 minutos, uso único, guardado só como
+  hash SHA-256 em `telegram_link_codes`. Um Telegram não serve a duas pessoas. Desativar o membro
+  ou desvincular corta o acesso.
+- **Isolamento:** o adaptador (`apps/worker/src/telegram.ts`) é a única parte que conhece a API do
+  Telegram (`TelegramPort`). O token nunca aparece em logs.
+- Passo a passo e limites: [telegram.md](telegram.md).
+
 ## Por que não WhatsApp (por enquanto)
 
 - Groups API exige Official Business Account (verificação de empresa); não concedida a contas de

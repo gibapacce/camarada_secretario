@@ -47,6 +47,16 @@ describe('worker fetch', () => {
     expect(await res.text()).toBe('<html></html>');
   });
 
+  it('delega /telegram/webhook ao bot (503 sem configuração) e não aos assets', async () => {
+    const env = makeEnv();
+    const res = await worker.fetch(
+      new Request('http://localhost/telegram/webhook', { method: 'POST' }),
+      env,
+    );
+    expect(res.status).toBe(503);
+    expect(env.ASSETS.fetch).not.toHaveBeenCalled();
+  });
+
   it('não confunde /apiario com a API', async () => {
     const env = makeEnv();
     await worker.fetch(new Request('http://localhost/apiario'), env);

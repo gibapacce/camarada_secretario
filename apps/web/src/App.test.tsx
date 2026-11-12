@@ -56,6 +56,7 @@ function context(intensity: PersonaIntensity): MemberContext {
       tutorial_step: null,
       tutorial_paused: false,
       tips_seen: [],
+      telegram_linked: false,
     },
     household: { id: HOUSE, name: 'Casa Teste', timezone: 'America/Sao_Paulo' },
     members: [
@@ -146,6 +147,14 @@ function fakeApi(intensity: PersonaIntensity = 'full') {
     assistant: vi.fn((text: string, _key: string) =>
       ok({ reply: `Eco: ${text}`, changed: text.startsWith('tarefa') }),
     ),
+    createTelegramLink: vi.fn(() =>
+      ok({
+        code: 'ABC123DEF456',
+        expires_in_minutes: 15,
+        link: 'https://t.me/camarada_bot?start=ABC123DEF456',
+      }),
+    ),
+    unlinkTelegram: vi.fn(() => Promise.resolve({ ok: true })),
   } satisfies Api;
 }
 
@@ -347,6 +356,16 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copiar: O que falta fazer?' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('O que falta fazer?'));
     expect(await screen.findByText('Copiado!')).toBeDefined();
+  });
+
+  it('Preferências: gera o código do Telegram e mostra o link do bot', async () => {
+    const api = fakeApi('full');
+    renderApp({ auth: fakeAuth(true), api }, '/preferencias');
+    fireEvent.click(await screen.findByRole('button', { name: 'Gerar código' }));
+    expect(await screen.findByText('/start ABC123DEF456')).toBeDefined();
+    const link = screen.getByRole('link', { name: /abra o bot/ });
+    expect(link.getAttribute('href')).toBe('https://t.me/camarada_bot?start=ABC123DEF456');
+    expect(link.getAttribute('rel')).toContain('noreferrer');
   });
 
   it('o atalho do treino abre a conversa e envia "treino" uma única vez', async () => {

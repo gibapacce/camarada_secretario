@@ -28,7 +28,7 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules,
   },
   {
-    files: ['*.{js,ts}', '**/vite.config.ts'],
+    files: ['*.{js,ts}', 'scripts/**/*.{js,mjs}', '**/vite.config.ts'],
     languageOptions: { globals: globals.node },
   },
 );

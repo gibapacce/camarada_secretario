@@ -94,6 +94,16 @@ export interface Api {
   uploadPhoto(taskId: string, file: Blob, caption: string, key: string): Promise<PhotoResult>;
   deletePhoto(photoId: string, key: string): Promise<PhotoResult>;
   assistant(text: string, key: string): Promise<{ ok: true; reply: string; changed: boolean }>;
+  createTelegramLink(): Promise<TelegramLink>;
+  unlinkTelegram(): Promise<unknown>;
+}
+
+export interface TelegramLink {
+  ok: true;
+  code: string;
+  expires_in_minutes: number;
+  /** Presente só quando o nome do bot está configurado no Worker. */
+  link?: string;
 }
 
 export function createApi(
@@ -168,6 +178,8 @@ export function createApi(
     },
     deletePhoto: (photoId, key) => request('DELETE', `/api/photos/${enc(photoId)}`, undefined, key),
     assistant: (text, key) => request('POST', '/api/assistant', { text }, key),
+    createTelegramLink: () => request('POST', '/api/me/telegram'),
+    unlinkTelegram: () => request('DELETE', '/api/me/telegram'),
   };
 }
 
