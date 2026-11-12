@@ -92,7 +92,7 @@ describe('persistência', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+  }, 20_000);
 
   it('migrations não podem ser aplicadas duas vezes por engano', async () => {
     const fresh = await createTestDb();

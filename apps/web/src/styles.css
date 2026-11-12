@@ -670,6 +670,26 @@ fieldset {
   flex: 1;
 }
 
+/* Primeiros passos */
+.examples {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.examples li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.examples li:first-child {
+  border-top: 0;
+}
+
 /* Avisos */
 .toast-region {
   position: fixed;

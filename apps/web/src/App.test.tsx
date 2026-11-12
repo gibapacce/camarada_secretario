@@ -51,6 +51,11 @@ function context(intensity: PersonaIntensity): MemberContext {
       role: 'owner',
       persona_intensity: intensity,
       guidance_mode: 'guided',
+      guidance_since: '2026-10-26T12:00:00Z',
+      guided_actions: 0,
+      tutorial_step: null,
+      tutorial_paused: false,
+      tips_seen: [],
     },
     household: { id: HOUSE, name: 'Casa Teste', timezone: 'America/Sao_Paulo' },
     members: [
@@ -332,5 +337,24 @@ describe('App', () => {
     expect(text).toBe('tarefa: varrer');
     expect(key).toMatch(UUID_RE);
     await waitFor(() => expect(api.me.mock.calls.length).toBeGreaterThan(meCalls));
+  });
+
+  it('Primeiros passos: copia um exemplo e rotula neutro no modo sério', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    renderApp({ auth: fakeAuth(true), api: fakeApi('off') }, '/primeiros-passos');
+    expect(await screen.findByRole('heading', { name: 'Primeiros passos' })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar: O que falta fazer?' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('O que falta fazer?'));
+    expect(await screen.findByText('Copiado!')).toBeDefined();
+  });
+
+  it('o atalho do treino abre a conversa e envia "treino" uma única vez', async () => {
+    const api = fakeApi('full');
+    renderApp({ auth: fakeAuth(true), api }, '/primeiros-passos');
+    fireEvent.click(await screen.findByRole('link', { name: 'Começar o treino' }));
+    expect(await screen.findByText('Eco: treino')).toBeDefined();
+    expect(api.assistant).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe('');
   });
 });

@@ -9,6 +9,7 @@ export const DB_FUNCTIONS = [
   'get_task',
   'get_member_context',
   'update_member_preferences',
+  'update_member_training',
   'add_task_photo',
   'delete_task_photo',
   'get_assistant_state',

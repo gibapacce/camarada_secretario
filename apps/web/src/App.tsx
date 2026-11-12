@@ -13,6 +13,7 @@ import type { AuthPort } from './lib/auth.ts';
 import { Link, usePath } from './lib/router.tsx';
 import { CalendarPage } from './pages/CalendarPage.tsx';
 import { ChatPage } from './pages/ChatPage.tsx';
+import { GetStartedPage } from './pages/GetStartedPage.tsx';
 import { NewTaskPage } from './pages/NewTaskPage.tsx';
 import { PreferencesPage } from './pages/PreferencesPage.tsx';
 import { SummaryPage } from './pages/SummaryPage.tsx';
@@ -275,6 +276,11 @@ function Nav() {
     { to: '/tarefas', label: text.nav.tasks, active: path.startsWith('/tarefas') },
     { to: '/calendario', label: text.nav.calendar, active: path.startsWith('/calendario') },
     { to: '/conversar', label: text.nav.chat, active: path.startsWith('/conversar') },
+    {
+      to: '/primeiros-passos',
+      label: text.nav.start,
+      active: path.startsWith('/primeiros-passos'),
+    },
     { to: '/preferencias', label: text.nav.preferences, active: path.startsWith('/preferencias') },
   ];
   return (
@@ -301,6 +307,7 @@ function Routes() {
   if (task?.[1]) return <TaskDetailsPage key={task[1]} id={task[1]} />;
   if (path === '/calendario') return <CalendarPage />;
   if (path === '/conversar') return <ChatPage />;
+  if (path === '/primeiros-passos') return <GetStartedPage />;
   if (path === '/preferencias') return <PreferencesPage />;
   return (
     <section>

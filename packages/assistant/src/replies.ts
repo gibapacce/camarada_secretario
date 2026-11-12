@@ -70,6 +70,13 @@ const HELP_TOPICS: Record<string, string> = {
   ].join('\n'),
   fotos: 'Fotos: por enquanto, anexe pelo painel, na página da tarefa.',
   lembretes: 'Lembretes automáticos chegam em breve (Fase 8).',
+  treino: [
+    'Missão de Treino (5 passos, 2 minutos):',
+    '• "Treino" começa; "depois" pausa; "continuar treino" retoma.',
+    '• "Pular" sai do treino e apaga as tarefas de treino.',
+    '• "Reiniciar treino" começa de novo.',
+    'As tarefas de treino não aparecem nas listas, nos resumos nem nos lembretes.',
+  ].join('\n'),
 };
 
 export function helpReply(intensity: PersonaIntensity, topic?: string): string {
@@ -86,8 +93,9 @@ export function helpReply(intensity: PersonaIntensity, topic?: string): string {
     '• "O que falta fazer?"',
     '• "Feito 2" ou "Concluí a louça"',
     '• "Desfazer"  • "Resumo"',
+    '• "Treino": missão guiada de 2 minutos',
     '• "Modo sério" / "Modo camarada"',
-    'Temas: "ajuda criar", "ajuda consultar", "ajuda concluir", "ajuda fotos".',
+    'Temas: "ajuda criar", "ajuda consultar", "ajuda concluir", "ajuda fotos", "ajuda treino".',
   ].join('\n');
 }
 

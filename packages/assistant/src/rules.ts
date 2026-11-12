@@ -5,6 +5,8 @@ import type { Intent, TaskRef } from './intents.ts';
 export interface RuleContext {
   today: string;
   members: { id: string; display_name: string }[];
+  /** Estado da Missão de Treino; comandos curtos como "depois" só valem durante o treino. */
+  training?: 'active' | 'paused' | undefined;
 }
 
 const CREATE_RE =
@@ -80,6 +82,39 @@ export function buildCreate(text: string, ctx: RuleContext): Intent | null {
   } as Intent;
 }
 
+/** Comandos da Missão de Treino. Os curtos ("depois", "pular") só valem com o treino em curso. */
+function parseTraining(n: string, ctx: RuleContext): Intent | null {
+  const running = ctx.training !== undefined;
+  if (/^(?:treino|missao de treino|(?:fazer|iniciar|comecar) (?:o )?treino|treinar)$/.test(n)) {
+    return { type: 'training', action: 'start' };
+  }
+  if (/^(?:reiniciar|recomecar|refazer) (?:o )?treino$/.test(n)) {
+    return { type: 'training', action: 'restart' };
+  }
+  if (/^(?:continuar|continua|retomar|retoma) (?:o )?treino$/.test(n)) {
+    return { type: 'training', action: 'resume' };
+  }
+  if (ctx.training === 'paused' && /^(?:continuar|continua|retomar|retoma)$/.test(n)) {
+    return { type: 'training', action: 'resume' };
+  }
+  if (
+    /^(?:pausar|pausa) (?:o )?treino$/.test(n) ||
+    (running && /^(?:depois|mais tarde)$/.test(n))
+  ) {
+    return { type: 'training', action: 'pause' };
+  }
+  if (
+    /^(?:pular|sair d[oe]|parar|encerrar|cancelar) (?:o )?treino$/.test(n) ||
+    (running && n === 'pular')
+  ) {
+    return { type: 'training', action: 'skip' };
+  }
+  if (running && /^(?:proximo|proxima|seguinte|avancar)(?: passo)?$/.test(n)) {
+    return { type: 'training', action: 'next' };
+  }
+  return null;
+}
+
 /** Entende comandos comuns sem IA. Retorna null quando não reconhece. */
 export function parseRules(text: string, ctx: RuleContext): Intent | null {
   const n = normalizeText(text);
@@ -94,12 +129,18 @@ export function parseRules(text: string, ctx: RuleContext): Intent | null {
   }
 
   const help =
-    /^(?:\/?ajuda|\/start|\/help|menu|me ensina|nao sei usar|o que voce faz|exemplos|como (?:faco|funciona)(?: .*)?)(?: (criar|consultar|concluir|fotos|lembretes))?$/.exec(
+    /^(?:\/?ajuda|\/start|\/help|menu|me ensina|nao sei usar|o que voce faz|exemplos|como (?:faco|funciona)(?: .*)?)(?: (criar|consultar|concluir|fotos|lembretes|treino))?$/.exec(
       n,
     );
   if (help) {
     const topic = help[1] as 'criar' | undefined;
     return topic ? { type: 'help', topic } : { type: 'help' };
+  }
+
+  const training = parseTraining(n, ctx);
+  if (training) return training;
+  if (ctx.training === 'active' && /^\s*treino\s*:\s*\S/.test(fold(text))) {
+    return buildCreate(text.slice(text.indexOf(':') + 1).trim(), ctx);
   }
 
   if (/^(?:modo serio|sem piadas?|\/serio)$/.test(n))

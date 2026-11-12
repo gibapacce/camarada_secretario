@@ -27,6 +27,7 @@ export {
 export {
   createMemberService,
   preferencesSchema,
+  trainingSchema,
   type GuidanceMode,
   type MemberContext,
   type MemberService,

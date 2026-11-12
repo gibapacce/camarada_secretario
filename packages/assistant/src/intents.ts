@@ -59,7 +59,11 @@ export const intentSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('undo') }),
   z.object({
     type: z.literal('help'),
-    topic: z.enum(['criar', 'consultar', 'concluir', 'fotos', 'lembretes']).optional(),
+    topic: z.enum(['criar', 'consultar', 'concluir', 'fotos', 'lembretes', 'treino']).optional(),
+  }),
+  z.object({
+    type: z.literal('training'),
+    action: z.enum(['start', 'restart', 'pause', 'resume', 'skip', 'next']),
   }),
   z.object({ type: z.literal('set_persona'), intensity: z.enum(['off', 'light', 'full']) }),
   z.object({ type: z.literal('set_guidance'), mode: z.enum(['guided', 'normal']) }),

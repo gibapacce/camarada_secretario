@@ -1,12 +1,21 @@
 import type { PersonaIntensity } from './index.ts';
 
 export interface PanelText {
-  nav: { summary: string; tasks: string; calendar: string; chat: string; preferences: string };
+  nav: {
+    summary: string;
+    tasks: string;
+    calendar: string;
+    chat: string;
+    start: string;
+    preferences: string;
+  };
   summaryTitle: string;
   tasksTitle: string;
   calendarTitle: string;
   chatTitle: string;
   chatIntro: string;
+  startTitle: string;
+  startIntro: string;
   preferencesTitle: string;
   historyTitle: string;
   photosTitle: string;
@@ -24,6 +33,7 @@ const NEUTRAL: PanelText = {
     tasks: 'Tarefas',
     calendar: 'Calendário',
     chat: 'Conversar',
+    start: 'Primeiros passos',
     preferences: 'Preferências',
   },
   summaryTitle: 'Resumo',
@@ -32,6 +42,9 @@ const NEUTRAL: PanelText = {
   chatTitle: 'Conversar',
   chatIntro:
     'Escreva como no chat. Ex.: "nova tarefa: lavar a louça amanhã às 20h", "pendentes", "feito 1".',
+  startTitle: 'Primeiros passos',
+  startIntro:
+    'Exemplos prontos de frases para o assistente. Copie, cole na conversa e troque pelo que você precisa.',
   preferencesTitle: 'Preferências',
   historyTitle: 'Histórico',
   photosTitle: 'Fotos',
@@ -54,6 +67,7 @@ const THEMED: PanelText = {
     tasks: 'Plano Quinquenal',
     calendar: 'Calendário',
     chat: 'Falar com o Camarada',
+    start: 'Círculo de Estudos',
     preferences: 'Comitê',
   },
   summaryTitle: 'Assembleia Geral',
@@ -62,6 +76,9 @@ const THEMED: PanelText = {
   chatTitle: 'Falar com o Camarada',
   chatIntro:
     'Fale como no chat, camarada. Ex.: "nova tarefa: lavar a louça amanhã às 20h", "pendentes", "feito 1".',
+  startTitle: 'Círculo de Estudos',
+  startIntro:
+    'Frases prontas para falar com o Camarada. Copie, cole na conversa e troque pelo que você precisa.',
   preferencesTitle: 'Comitê de Preferências',
   historyTitle: 'Anais do Coletivo',
   photosTitle: 'Arquivo Nacional',

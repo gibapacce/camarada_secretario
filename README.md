@@ -5,22 +5,27 @@ recorrências, lembretes e painel web, com a personalidade de um gato comunista 
 
 - Requisitos completos: [docs/plano_assistente_domestico_ia.md](docs/plano_assistente_domestico_ia.md)
 - Decisões de arquitetura e limites dos planos gratuitos: [docs/architecture.md](docs/architecture.md)
+- Persona e guia de uso: [docs/persona.md](docs/persona.md), [docs/onboarding.md](docs/onboarding.md)
 
 **Princípio central:** o banco de dados é a fonte da verdade. A IA só interpreta mensagens; o
 backend valida e executa. A persona é apenas camada de apresentação.
 
 ## Estado atual
 
-| Fase                       | Situação                                                  |
-| -------------------------- | --------------------------------------------------------- |
-| 0 Viabilidade e decisões   | ✅ Concluída                                              |
-| 1 Esqueleto e documentação | ✅ Concluída                                              |
-| 2 Banco e regras           | ✅ Concluída (local, PGlite)                              |
-| 3 Painel web               | ✅ Concluída localmente (publicação na Fase 9)            |
-| 4 Fotos                    | ✅ Concluída localmente (bucket privado no Supabase real) |
+| Fase                       | Situação                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------- |
+| 0 Viabilidade e decisões   | ✅ Concluída                                                                                   |
+| 1 Esqueleto e documentação | ✅ Concluída                                                                                   |
+| 2 Banco e regras           | ✅ Concluída (local, PGlite)                                                                   |
+| 3 Painel web               | ✅ Concluída localmente (publicação na Fase 9)                                                 |
+| 4 Fotos                    | ✅ Concluída localmente (bucket privado no Supabase real)                                      |
+| 5 Assistente (IA)          | ✅ Concluída localmente (regras primeiro, Workers AI opcional)                                 |
+| 6 Persona e Modo Aprendiz  | ✅ Concluída localmente, exceto variantes de mensagem e modelos de lembrete (vão com a Fase 8) |
 
-O projeto Supabase (plano Free, São Paulo) existe e tem as migrations aplicadas, sem o seed. Cadastro
-público desligado, chave de assinatura ES256. O Worker ainda roda só localmente (`wrangler dev`).
+O projeto Supabase (plano Free, São Paulo) existe, sem o seed. As migrations das fases 2 a 4 foram
+aplicadas; **confira se as mais recentes** (`20261026190000_assistant_state.sql` e
+`20261112100000_training.sql`) também foram. Cadastro público desligado, chave de assinatura
+ES256. O Worker ainda roda só localmente (`wrangler dev`).
 Para aplicar migrations novas, rode o executável do Supabase CLI diretamente
 (`supabase.exe db push --db-url <url>`). Não use `npx supabase ...` com a senha na URL: o npm 12
 repete o comando na tela e no log.
@@ -33,12 +38,13 @@ apps/
   web/        Painel React + TypeScript (Vite)
 packages/
   shared/     Utilitários e tipos compartilhados (fuso, normalização de texto)
-  persona/    Camarada Ho Chi Miau: intensidades, catálogo de mensagens, Modo Aprendiz
+  persona/    Camarada Ho Chi Miau: intensidades, rótulos do painel e mensagens de ação
+  assistant/  Conversa: regras em português, IA opcional, Missão de Treino e dicas
   db/         Cliente do banco (Supabase/PostgREST), validação (zod) e serviço de tarefas
 supabase/
   migrations/ Esquema e funções SQL transacionais (fonte da verdade)
   seed.sql    Dados fictícios para desenvolvimento
-docs/         Plano, arquitetura e guias
+docs/         Plano, arquitetura, persona e guia de uso (onboarding)
 .github/      CI (formato, lint, tipos, testes, build)
 ```
 

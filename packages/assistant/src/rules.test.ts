@@ -95,4 +95,40 @@ describe('parseRules', () => {
     expect(parseRules('lavar a louça amanhã', ctx)).toBeNull();
     expect(parseRules('qual a capital da França?', ctx)).toBeNull();
   });
+
+  describe('Missão de Treino', () => {
+    const active = { ...ctx, training: 'active' as const };
+    const paused = { ...ctx, training: 'paused' as const };
+
+    it.each([
+      ['treino', { type: 'training', action: 'start' }],
+      ['Reiniciar treino', { type: 'training', action: 'restart' }],
+      ['continuar treino', { type: 'training', action: 'resume' }],
+      ['sair do treino', { type: 'training', action: 'skip' }],
+      ['pausar treino', { type: 'training', action: 'pause' }],
+      ['ajuda treino', { type: 'help', topic: 'treino' }],
+    ])('%s vale a qualquer momento', (text, expected) => {
+      expect(parseRules(text, ctx)).toEqual(expected);
+    });
+
+    it('comandos curtos só valem com o treino em curso', () => {
+      for (const word of ['depois', 'pular', 'próximo']) {
+        expect(parseRules(word, ctx)).toBeNull();
+      }
+      expect(parseRules('depois', active)).toEqual({ type: 'training', action: 'pause' });
+      expect(parseRules('Pular', active)).toEqual({ type: 'training', action: 'skip' });
+      expect(parseRules('próximo', active)).toEqual({ type: 'training', action: 'next' });
+      expect(parseRules('continuar', paused)).toEqual({ type: 'training', action: 'resume' });
+      expect(parseRules('continuar', active)).toBeNull();
+    });
+
+    it('"Treino: ..." cria a tarefa de treino só durante o treino', () => {
+      expect(parseRules('Treino: regar as plantas amanhã', active)).toEqual({
+        type: 'create_task',
+        title: 'Regar as plantas',
+        date: '2026-10-27',
+      });
+      expect(parseRules('Treino: regar as plantas amanhã', ctx)).toBeNull();
+    });
+  });
 });

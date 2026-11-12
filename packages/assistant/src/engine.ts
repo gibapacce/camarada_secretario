@@ -38,8 +38,19 @@ import {
   type ReplyContext,
 } from './replies.ts';
 import { buildCreate, parseRules } from './rules.ts';
+import {
+  TIPS,
+  TRAINING_TEXT,
+  exitOfferText,
+  stepPrompt,
+  trainingDoneText,
+  welcomeText,
+  type TipKey,
+} from './training.ts';
 
 const MAX_LIST = 20;
+const EXIT_AFTER_ACTIONS = 10;
+const EXIT_AFTER_DAYS = 14;
 const ACTIONS = ['complete', 'reopen', 'cancel', 'details', 'update'] as const;
 type Action = (typeof ACTIONS)[number];
 
@@ -59,6 +70,7 @@ const stateSchema = z.object({
         id: z.uuid(),
       }),
       z.object({ kind: z.literal('suggest'), options: z.array(intentSchema).min(1).max(5) }),
+      z.object({ kind: z.literal('exit') }),
     ])
     .optional(),
 });
@@ -94,9 +106,25 @@ interface Turn {
   state: State;
   next: State;
   changed: boolean;
+  /** "active" com o treino em curso, "paused" se pausado, ausente sem treino. */
+  training: 'active' | 'paused' | undefined;
+  /** O que aconteceu nesta mensagem, para avançar o treino e escolher a dica. */
+  event?: 'create' | 'list' | 'complete' | 'summary' | 'next';
+  tutorialTask?: boolean;
+  tip?: TipKey;
 }
 
 const MAX_TEXT = 1000;
+
+function guidedLongEnough(m: MemberContext['member']): boolean {
+  const since = Date.parse(m.guidance_since);
+  return (
+    m.guided_actions >= EXIT_AFTER_ACTIONS || Date.now() - since >= EXIT_AFTER_DAYS * 86_400_000
+  );
+}
+function trainingOf(m: MemberContext['member']): Turn['training'] {
+  return m.tutorial_step ? (m.tutorial_paused ? 'paused' : 'active') : undefined;
+}
 
 export function createAssistant(deps: AssistantDeps) {
   const scopeOf = (t: Turn) => ({
@@ -132,9 +160,10 @@ export function createAssistant(deps: AssistantDeps) {
       state: await loadState(member),
       next: {},
       changed: false,
+      training: trainingOf(member.member),
     };
     const text = input.text.trim().slice(0, MAX_TEXT);
-    const ruleCtx = { today: turn.today, members: member.members };
+    const ruleCtx = { today: turn.today, members: member.members, training: turn.training };
 
     let intent = text ? parseRules(text, ruleCtx) : ({ type: 'help' } as Intent);
     let usedAi = false;
@@ -157,6 +186,7 @@ export function createAssistant(deps: AssistantDeps) {
       turn.next = { ...(turn.state.list && { list: turn.state.list }) };
       try {
         reply = await dispatch(turn, intent);
+        reply += await afterReply(turn, intent);
       } catch (error) {
         reply =
           error instanceof DomainError && !['db_error', 'db_unavailable'].includes(error.code)
@@ -185,8 +215,111 @@ export function createAssistant(deps: AssistantDeps) {
     return unknownReply(turn.rc, options);
   }
 
+  /** Textos extras depois da resposta: avanço do treino, boas-vindas, oferta de saída e dicas. */
+  async function afterReply(turn: Turn, intent: Intent): Promise<string> {
+    const m = turn.member.member;
+    const scope = { householdId: m.household_id, actorMemberId: m.id };
+    const seen = new Set(m.tips_seen);
+    const mark = (tip: string) => deps.members.updateTraining(scope, { action: 'tip', tip });
+    try {
+      if (turn.training === 'active') return await advanceTraining(turn, scope);
+      if (intent.type === 'training' || intent.type === 'help') {
+        if (!seen.has('welcome')) await mark('welcome');
+        return '';
+      }
+      if (turn.next.pending || m.guidance_mode !== 'guided') return '';
+      const intensity = turn.rc.intensity;
+      if (!seen.has('welcome')) {
+        await mark('welcome');
+        return `\n\n${welcomeText(m.display_name, intensity)}`;
+      }
+      if (!seen.has('exit_offer') && guidedLongEnough(m)) {
+        await mark('exit_offer');
+        turn.next = { ...turn.next, pending: { kind: 'exit' } };
+        return `\n\n${exitOfferText(m.display_name, intensity)}`;
+      }
+      if (turn.tip && !seen.has(turn.tip)) {
+        await mark(turn.tip);
+        return `\n\n${TIPS[turn.tip]}`;
+      }
+    } catch {
+      console.warn('training_update_failed');
+    }
+    return '';
+  }
+
+  async function advanceTraining(
+    turn: Turn,
+    scope: { householdId: string; actorMemberId: string },
+  ): Promise<string> {
+    const step = turn.member.member.tutorial_step ?? 0;
+    const { event, tutorialTask } = turn;
+    let to: number | null = null;
+    if (step === 1 && event === 'create' && tutorialTask) to = 2;
+    else if (step === 2 && event === 'list') to = 3;
+    else if (step === 3 && event === 'next') to = 4;
+    else if ((step === 3 || step === 4) && event === 'complete' && tutorialTask) to = 5;
+    else if (step === 5 && event === 'summary') to = 6;
+    if (to === null) return '';
+    if (to > 5) {
+      await deps.members.updateTraining(scope, { action: 'finish' });
+      return `\n\n${trainingDoneText(turn.rc.intensity)}`;
+    }
+    await deps.members.updateTraining(scope, { action: 'step', step: to });
+    return `\n\n${stepPrompt(to, turn.rc.intensity)}`;
+  }
+
+  async function trainingCommand(
+    turn: Turn,
+    action: IntentOf<'training'>['action'],
+  ): Promise<string> {
+    const m = turn.member.member;
+    const scope = { householdId: m.household_id, actorMemberId: m.id };
+    const intensity = turn.rc.intensity;
+    const step = m.tutorial_step ?? 1;
+    const update = (a: 'start' | 'pause' | 'resume' | 'finish') =>
+      deps.members.updateTraining(scope, { action: a });
+    const intro = intensity === 'full' ? 'Miau! Missão de Treino aceita. 🐱🚩\n' : '';
+
+    switch (action) {
+      case 'start':
+        if (turn.training === 'active') {
+          return `Você já está no treino.\n${stepPrompt(step, intensity)}`;
+        }
+        if (turn.training === 'paused') {
+          await update('resume');
+          return stepPrompt(step, intensity);
+        }
+        await update('start');
+        return `${intro}${stepPrompt(1, intensity)}`;
+      case 'restart':
+        await update('start');
+        return `${intro}${stepPrompt(1, intensity)}`;
+      case 'pause':
+        if (!turn.training) return TRAINING_TEXT.none;
+        await update('pause');
+        return TRAINING_TEXT.paused;
+      case 'resume':
+        if (turn.training === 'paused') await update('resume');
+        else if (!turn.training) return TRAINING_TEXT.nonePaused;
+        return stepPrompt(step, intensity);
+      case 'skip':
+        if (!turn.training) return TRAINING_TEXT.none;
+        await update('finish');
+        return TRAINING_TEXT.skipped;
+      case 'next':
+        if (turn.training === 'active' && step === 3) {
+          turn.event = 'next';
+          return 'Ok, vamos em frente.';
+        }
+        return TRAINING_TEXT.notNow;
+    }
+  }
+
   async function dispatch(turn: Turn, intent: Intent): Promise<string> {
     switch (intent.type) {
+      case 'training':
+        return trainingCommand(turn, intent.action);
       case 'help':
         return helpReply(turn.rc.intensity, intent.topic);
       case 'out_of_scope':
@@ -262,10 +395,15 @@ export function createAssistant(deps: AssistantDeps) {
       assignedToMemberId: assignee ?? null,
       ...(due && { dueAt: due }),
       ...(intent.priority && { priority: intent.priority }),
+      ...(turn.training === 'active' &&
+        turn.member.member.tutorial_step === 1 && { isTutorial: true }),
       idempotencyKey: turn.key,
     });
     if (!r.ok) return errorMessage(r.error);
-    turn.changed = true;
+    turn.changed = !r.task.is_tutorial;
+    turn.event = 'create';
+    turn.tutorialTask = r.task.is_tutorial;
+    if (!due) turn.tip = 'due_date';
     return `${actionMessage('created', r.task.title, turn.rc.intensity)}\n${taskFacts(turn.rc, r.task)}`;
   }
 
@@ -273,7 +411,12 @@ export function createAssistant(deps: AssistantDeps) {
     const hh = turn.member.member.household_id;
     const text = panelText(turn.rc.intensity);
     const weekStart = dayStartUtc(startOfWeek(turn.today), turn.rc.tz);
-    const base = { householdId: hh, limit: 200 } as const;
+    const training = turn.training === 'active';
+    const base = {
+      householdId: hh,
+      limit: 200,
+      ...(training && { includeTutorial: true }),
+    } as const;
     let header: string;
     let tasks: Task[];
     switch (intent.view) {
@@ -342,8 +485,12 @@ export function createAssistant(deps: AssistantDeps) {
         );
         break;
     }
+    // Tarefas de treino só aparecem para quem as criou, e só durante o treino.
+    tasks = tasks.filter((t) => !t.is_tutorial || t.created_by_member_id === turn.member.member.id);
     const shown = tasks.slice(0, MAX_LIST);
     turn.next = { list: shown.map((t) => t.id) };
+    turn.event = 'list';
+    if (shown.length > 0) turn.tip = 'done_number';
     return listReply(turn.rc, header, shown, tasks.length > shown.length);
   }
 
@@ -365,6 +512,7 @@ export function createAssistant(deps: AssistantDeps) {
       turn.rc.intensity === 'off'
         ? '📊 Resumo da semana:'
         : '📊 Balanço do Plano Quinquenal (que dura 7 dias):';
+    turn.event = 'summary';
     return [
       head,
       `✅ Concluídas: ${done.tasks.length} | ⏳ Pendentes: ${open.tasks.length} | ⚠️ Atrasadas: ${overdue.tasks.length}`,
@@ -388,7 +536,14 @@ export function createAssistant(deps: AssistantDeps) {
       return d.ok && d.task ? { kind: 'one', task: d.task } : { kind: 'none' };
     }
     const view = action === 'reopen' ? 'completed' : action === 'details' ? 'all' : 'open';
-    const pool = (await deps.tasks.listTasks({ householdId: hh, view, limit: 200 })).tasks;
+    const pool = (
+      await deps.tasks.listTasks({
+        householdId: hh,
+        view,
+        limit: 200,
+        ...(turn.training === 'active' && { includeTutorial: true }),
+      })
+    ).tasks.filter((t) => !t.is_tutorial || t.created_by_member_id === turn.member.member.id);
     const q = normalizeText(ref.query ?? '');
     const tokens = q.split(' ').filter((w) => w.length > 1 && !STOPWORDS.has(w));
     if (tokens.length === 0) return { kind: 'none' };
@@ -502,11 +657,16 @@ export function createAssistant(deps: AssistantDeps) {
       r.event !== 'task_already_open' &&
       r.event !== 'task_already_cancelled'
     ) {
-      turn.changed = true;
+      turn.changed ||= !r.task.is_tutorial;
     }
     if (r.event === 'task_already_completed') return `"${r.task.title}" já estava concluída.`;
     if (r.event === 'task_already_open') return `"${r.task.title}" já estava pendente.`;
     if (r.event === 'task_already_cancelled') return `"${r.task.title}" já estava cancelada.`;
+    if (event === 'completed') {
+      turn.event = 'complete';
+      turn.tutorialTask = r.task.is_tutorial;
+      turn.tip = 'undo';
+    }
     let text = actionMessage(event, r.task.title, turn.rc.intensity);
     const next = (r as { next_task?: Task | null }).next_task;
     if (next?.due_at) text += `\n🔁 Próxima: ${formatDateTime(next.due_at, turn.rc.tz)}.`;
@@ -538,6 +698,15 @@ export function createAssistant(deps: AssistantDeps) {
 
   async function confirm(turn: Turn, yes: boolean): Promise<string> {
     const p = turn.state.pending;
+    if (p?.kind === 'exit') {
+      if (!yes) return 'Ok, continuo com as dicas. Para ajuda, é só dizer "ajuda".';
+      await deps.members.updatePreferences(
+        { householdId: turn.member.member.household_id, actorMemberId: turn.member.member.id },
+        { guidanceMode: 'normal' },
+      );
+      turn.changed = true;
+      return 'Combinado: Modo Aprendiz desligado. A ajuda continua disponível: diga "ajuda".';
+    }
     if (p?.kind !== 'confirm') {
       return yes ? 'Não há nada para confirmar agora.' : 'Ok.';
     }

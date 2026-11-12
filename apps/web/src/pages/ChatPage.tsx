@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { errorText } from '../lib/api.ts';
 import { useApp } from '../lib/app-context.ts';
+import { navigate, useSearch } from '../lib/router.tsx';
 
 interface Message {
   id: number;
@@ -16,19 +17,17 @@ export function ChatPage() {
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLLIElement>(null);
   const nextId = useRef(0);
+  const autoSent = useRef(false);
+  const autoSend = useSearch().get('enviar');
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: 'nearest' });
   }, [messages]);
 
-  async function send(e: FormEvent) {
-    e.preventDefault();
-    const msg = draft.trim();
-    if (!msg || busy) return;
+  async function sendText(msg: string) {
     const add = (from: Message['from'], body: string) =>
       setMessages((list) => [...list, { id: nextId.current++, from, text: body }]);
     add('me', msg);
-    setDraft('');
     setBusy(true);
     try {
       const r = await api.assistant(msg, crypto.randomUUID());
@@ -39,6 +38,23 @@ export function ChatPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Atalhos como o da página "Primeiros passos" abrem a conversa já com a mensagem enviada, uma vez.
+  useEffect(() => {
+    if (!autoSend || autoSent.current) return;
+    autoSent.current = true;
+    navigate('/conversar', true);
+    void sendText(autoSend.slice(0, 1000));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSend]);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    const msg = draft.trim();
+    if (!msg || busy) return;
+    setDraft('');
+    await sendText(msg);
   }
 
   return (

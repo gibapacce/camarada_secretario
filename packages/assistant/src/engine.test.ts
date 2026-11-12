@@ -57,6 +57,8 @@ async function say(
   d: Partial<AssistantDeps> = {},
   key = `web:${crypto.randomUUID()}`,
 ) {
+  // Em produção o contexto do membro é carregado a cada mensagem.
+  await refreshAna();
   return createAssistant({ ...deps, ...d }).handle({ member: ana, text, key });
 }
 
@@ -205,6 +207,129 @@ describe('assistente sem IA', () => {
     const r = await say('tarefa: varrer', { tasks: broken });
     expect(r.reply).toContain('Nada foi registrado.');
     expect(r.changed).toBe(false);
+  });
+});
+
+describe('Modo Aprendiz', () => {
+  const guide = (sql = '') =>
+    pg.query(`update household_members set guidance_mode = 'guided' ${sql} where id = $1`, [
+      f.ownerId,
+    ]);
+  const tutorialTasks = async () =>
+    (await pg.query(`select 1 from tasks where is_tutorial and household_id = $1`, [f.householdId]))
+      .rows.length;
+  const stepOf = async () =>
+    (
+      await pg.query<{ tutorial_step: number | null }>(
+        'select tutorial_step from household_members where id = $1',
+        [f.ownerId],
+      )
+    ).rows[0]?.tutorial_step;
+
+  it('Missão de Treino: do passo 1 ao fim, sem aparecer fora do treino e apagando no final', async () => {
+    await guide();
+    await say('ajuda'); // consome as boas-vindas
+    expect((await say('treino')).reply).toContain('passo 1 de 5');
+
+    const created = await say('Treino: regar as plantas amanhã');
+    expect(created).toMatchObject({ intent: 'create_task', changed: false });
+    expect(created.reply).toContain('passo 2 de 5');
+    expect(await tutorialTasks()).toBe(1);
+    expect(await openTitles()).toEqual([]);
+    expect((await tasks.listTasks({ householdId: f.householdId, view: 'all' })).tasks).toHaveLength(
+      0,
+    );
+
+    const list = await say('pendentes');
+    expect(list.reply).toContain('1) Regar as plantas');
+    expect(list.reply).toContain('passo 3 de 5');
+
+    expect((await say('próximo')).reply).toContain('passo 4 de 5');
+    expect((await say('feito 1')).reply).toContain('Concluir "Regar as plantas"?');
+    expect((await say('sim')).reply).toContain('passo 5 de 5');
+    expect(await stepOf()).toBe(5);
+
+    const end = await say('resumo');
+    expect(end.reply).toContain('Concluídas: 0');
+    expect(end.reply).toContain('Missão de Treino cumprida');
+    expect(await stepOf()).toBeNull();
+    expect(await tutorialTasks()).toBe(0);
+  });
+
+  it('a tarefa de treino de uma pessoa não aparece na lista da outra', async () => {
+    await say('treino');
+    await say('Treino: regar as plantas');
+    const pedroAuth = crypto.randomUUID();
+    await pg.query(
+      `update household_members set auth_user_id = $1, guidance_mode = 'normal' where id = $2`,
+      [pedroAuth, f.memberId],
+    );
+    const scope = { householdId: f.householdId, actorMemberId: f.memberId };
+    await members.updateTraining(scope, { action: 'start' });
+    const pedro = (await members.getContext(pedroAuth)) as MemberContext;
+    const r = await createAssistant(deps).handle({
+      member: pedro,
+      text: 'pendentes',
+      key: `web:${crypto.randomUUID()}`,
+    });
+    expect(r.reply).not.toContain('Regar as plantas');
+    expect(await tutorialTasks()).toBe(1);
+  });
+
+  it('pausa, retoma e pula; pular apaga as tarefas de treino', async () => {
+    await say('treino');
+    await say('Treino: lavar o carro');
+    expect(await tutorialTasks()).toBe(1);
+
+    expect((await say('depois')).reply).toContain('Treino pausado');
+    // Pausado, o treino não interfere: a criação é uma tarefa de verdade.
+    await say('tarefa: varrer');
+    expect(await openTitles()).toEqual(['Varrer']);
+    expect((await say('continuar treino')).reply).toContain('passo 2 de 5');
+    expect((await say('pular')).reply).toContain('Treino encerrado');
+    expect(await stepOf()).toBeNull();
+    expect(await tutorialTasks()).toBe(0);
+    expect((await say('pular')).intent).toBe('unknown');
+  });
+
+  it('boas-vindas e cada dica aparecem uma única vez', async () => {
+    await guide();
+    const first = await say('tarefa: A');
+    expect(first.reply).toContain('Quer fazer um treino rápido');
+    expect(first.reply).not.toContain('Dica');
+    const second = await say('tarefa: B');
+    expect(second.reply).toContain('💡 Dica');
+    expect(second.reply).not.toContain('Quer fazer um treino rápido');
+    expect((await say('tarefa: C')).reply).not.toContain('Dica');
+    expect((await say('pendentes')).reply).toContain('"feito 2"');
+    expect((await say('pendentes')).reply).not.toContain('Dica');
+  });
+
+  it('oferece sair do modo depois de um tempo e respeita a resposta', async () => {
+    await guide(`, guidance_started_at = now() - interval '15 days'`);
+    await say('tarefa: A'); // boas-vindas
+    const offer = await say('tarefa: B');
+    expect(offer.reply).toContain('Quer que eu pare de dar dicas');
+    expect((await say('sim')).reply).toContain('Modo Aprendiz desligado');
+    const row = await pg.query<{ guidance_mode: string }>(
+      'select guidance_mode from household_members where id = $1',
+      [f.ownerId],
+    );
+    expect(row.rows[0]?.guidance_mode).toBe('normal');
+  });
+
+  it('dizer não à oferta mantém as dicas e não pergunta de novo', async () => {
+    await guide(`, guidance_started_at = now() - interval '15 days'`);
+    await say('tarefa: A');
+    await say('tarefa: B');
+    expect((await say('não')).reply).toContain('continuo com as dicas');
+    expect((await say('tarefa: C')).reply).not.toContain('Quer que eu pare');
+  });
+
+  it('modo normal não recebe boas-vindas nem dicas', async () => {
+    const r = await say('tarefa: A');
+    expect(r.reply).not.toContain('Dica');
+    expect(r.reply).not.toContain('treino rápido');
   });
 });
 

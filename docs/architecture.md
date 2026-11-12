@@ -57,7 +57,9 @@ novas para continuar compatível com o Supabase.
   Concluir algo já concluído também é inofensivo (`task_already_completed`).
 - **Atraso:** nunca é gravado; é calculado (`is_overdue`) quando `due_at < agora` e a tarefa está
   aberta.
-- **Tarefas de treino:** `is_tutorial = true` ficam fora das consultas por padrão.
+- **Tarefas de treino:** `is_tutorial = true` ficam fora das consultas por padrão. Só quem está
+  em treino as vê, e só as próprias. Terminar o treino as apaga; `cleanup_tutorial_tasks()` apaga
+  as de mais de 24 h.
 - **Erros:** autorização e entrada inválida geram exceção (nada é gravado). Resultados de negócio
   voltam como `{ok: false, error}` (ex.: `task_not_found`, `task_cancelled`, `undo_conflict`).
 
@@ -87,7 +89,9 @@ novas para continuar compatível com o Supabase.
 
 ### Pendências conhecidas
 
-- Tabelas de lembretes, log da persona e dicas entram nas fases 6 e 8.
+- Tabelas de lembretes e log da persona entram na Fase 8. O estado do treino e as dicas já
+  existem (`household_members.tutorial_step`, `tutorial_paused`, `tips_seen`; ver
+  [onboarding.md](onboarding.md)).
 - Cliente PostgREST validado com o Supabase real (26/10/2026): login ES256, 401 sem token ou com
   token adulterado, criar/repetir/concluir/desfazer, preferências, isolamento por casa e chave
   pública sem acesso direto às tabelas.
