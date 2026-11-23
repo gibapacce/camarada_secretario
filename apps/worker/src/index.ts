@@ -4,10 +4,12 @@ import {
   createAssistantStateStore,
   createMemberService,
   createPhotoService,
+  createReminderService,
   createTaskService,
 } from '@camarada/db';
 import { handleApi, type ApiDeps } from './api.ts';
 import { getTokenVerifier } from './auth.ts';
+import { runDailyCleanup, runReminders } from './reminders.ts';
 import { SupabaseStorage } from './storage.ts';
 import { createTelegramClient, handleTelegramWebhook, type TelegramDeps } from './telegram.ts';
 
@@ -76,6 +78,38 @@ export function buildTelegramDeps(env: Env, api: ApiDeps | null): TelegramDeps |
   };
 }
 
+/** Cron diário de limpeza (06:00 UTC = 03:00 em São Paulo); o outro Cron envia os lembretes. */
+export const CLEANUP_CRON = '0 6 * * *';
+
+/** Execução do Cron. Sem banco não faz nada; sem o token do bot só faz a limpeza. */
+export async function runScheduled(cron: string, env: Env, now?: Date): Promise<void> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) {
+    console.warn('cron_not_configured');
+    return;
+  }
+  const reminders = createReminderService(
+    new PostgrestDbClient({ url: env.SUPABASE_URL, serviceKey: env.SUPABASE_SECRET_KEY }),
+  );
+  if (cron === CLEANUP_CRON) {
+    console.warn('cleanup', await runDailyCleanup(reminders));
+    return;
+  }
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    return;
+  }
+  const result = await runReminders(
+    {
+      reminders,
+      telegram: createTelegramClient({ token: env.TELEGRAM_BOT_TOKEN }),
+      ...(env.PANEL_URL?.startsWith('https://') && { panelUrl: env.PANEL_URL }),
+    },
+    now,
+  );
+  if (result.sent + result.retry + result.failed > 0) {
+    console.warn('reminders', result);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
@@ -86,5 +120,8 @@ export default {
       return handleTelegramWebhook(request, buildTelegramDeps(env, buildDeps(env)));
     }
     return env.ASSETS.fetch(request);
+  },
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(runScheduled(controller.cron, env));
   },
 } satisfies ExportedHandler<Env>;

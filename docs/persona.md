@@ -56,7 +56,13 @@ com a IA fora do ar. A IA só interpreta o que a pessoa escreveu; o backend vali
 2. Os textos de ação têm o título entre aspas (`"{t}"`); não remova.
 3. Rode `npm run check`. Os testes cobrem os textos usados nos fluxos principais.
 
+## Lembretes
+
+Os textos de lembrete ficam em [reminders.ts](../packages/persona/src/reminders.ts): um texto
+neutro por tipo (`off`), 2 variantes no modo leve e 5 no completo. A variante é escolhida pela
+chave do lembrete, então uma nova tentativa de envio repete a mesma frase. Título e prazo vêm
+exatos do banco; assuntos sensíveis ficam neutros; atraso é cobrado com leveza, sem zombar.
+
 ## Ainda por fazer
 
-Variantes múltiplas por evento com sorteio anti-repetição e escolha determinística para lembretes
-entram junto com os lembretes (Fase 8).
+Sorteio anti-repetição nas respostas da conversa (`persona_message_log`).

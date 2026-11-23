@@ -74,12 +74,15 @@ export interface TaskChanges {
 
 export type TaskAction = 'complete' | 'reopen' | 'cancel';
 
+export interface PreferencesInput {
+  personaIntensity?: PersonaIntensity;
+  guidanceMode?: GuidanceMode;
+  reminders?: { before24h?: boolean; due?: boolean; overdue?: boolean };
+}
+
 export interface Api {
   me(): Promise<MemberContext>;
-  updatePreferences(p: {
-    personaIntensity?: PersonaIntensity;
-    guidanceMode?: GuidanceMode;
-  }): Promise<unknown>;
+  updatePreferences(p: PreferencesInput): Promise<unknown>;
   listTasks(params: ListParams): Promise<TaskListResult>;
   getTask(id: string): Promise<TaskDetailsResult>;
   createTask(input: CreateTaskInput, key: string): Promise<TaskResult>;

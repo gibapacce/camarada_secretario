@@ -18,6 +18,10 @@ export const DB_FUNCTIONS = [
   'delete_task_photo',
   'get_assistant_state',
   'set_assistant_state',
+  'claim_reminders',
+  'finish_reminder',
+  'cleanup_reminders',
+  'cleanup_tutorial_tasks',
 ] as const;
 export type DbFunction = (typeof DB_FUNCTIONS)[number];
 

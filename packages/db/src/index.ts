@@ -45,3 +45,10 @@ export {
   type TaskPhoto,
 } from './photos.ts';
 export { createAssistantStateStore, type AssistantStateStore } from './assistant-state.ts';
+export {
+  createReminderService,
+  type ReminderJob,
+  type ReminderOutcome,
+  type ReminderService,
+  type ReminderType,
+} from './reminders.ts';

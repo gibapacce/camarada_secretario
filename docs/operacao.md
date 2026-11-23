@@ -93,9 +93,19 @@ Teste a recuperação num projeto descartável pelo menos uma vez antes de preci
 
 ## Pausa do Supabase Free
 
-O projeto pausa após 7 dias sem atividade. Uso normal pelas duas pessoas evita isso; em viagens
-longas, abra o painel ou rode `npm run backup` (que também acessa o banco) ao menos uma vez por
-semana. Quando o Cron da Fase 8 existir, ele mantém o banco ativo sozinho.
+O projeto pausa após 7 dias sem atividade. O Cron dos lembretes consulta o banco a cada 5 minutos,
+o que mantém o projeto ativo sem ninguém abrir o painel. Se o Cron for desligado, abra o painel ou
+rode `npm run backup` ao menos uma vez por semana.
+
+## Lembretes (Cron)
+
+- **Ver se está rodando:** Cloudflare → Workers & Pages → camarada-ho-chi-miau → Settings →
+  Trigger Events (dois Crons) e a aba Logs (eventos `reminders` e `cleanup`). Localmente:
+  `npx wrangler dev --test-scheduled` e acesse `/__scheduled?cron=*/5+*+*+*+*`.
+- **Ver o que saiu:** no SQL Editor do Supabase,
+  `select reminder_type, status, attempt_count, last_error, scheduled_for from reminder_deliveries order by created_at desc limit 20;`
+- **Pausar os lembretes:** remova `TELEGRAM_BOT_TOKEN` do Worker ou o bloco `triggers` do
+  `wrangler.jsonc` e publique. Nada se perde; lembretes perdidos durante a pausa são descartados.
 
 ## Cotas gratuitas: o que acompanhar
 

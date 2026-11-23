@@ -67,6 +67,8 @@ Sem vinculação, o Worker tentará responder ao Telegram de verdade e o envio f
 
 - Só chat privado (grupos ficam para depois; com o modo de privacidade o bot só veria comandos).
 - Sem fotos, sem áudio.
-- Lembretes proativos entram na Fase 8 (usam `household_members.telegram_chat_id`).
+- Lembretes: no prazo, de atraso e 24 h antes, configuráveis por pessoa no painel (veja
+  "Lembretes (Fase 8)" em [architecture.md](architecture.md)). Exigem `telegram_chat_id`, gravado
+  na vinculação.
 - Mensagens repetidas pelo Telegram após uma falha podem gerar a mesma resposta duas vezes; os
   dados nunca duplicam.

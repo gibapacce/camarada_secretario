@@ -24,4 +24,9 @@
   "observability": {
     "enabled": true,
   },
+  // Lembretes a cada 5 minutos; limpeza diária às 06:00 UTC (CLEANUP_CRON em src/index.ts).
+  // O plano gratuito permite 5 Cron Triggers por conta.
+  "triggers": {
+    "crons": ["*/5 * * * *", "0 6 * * *"],
+  },
 }

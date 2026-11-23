@@ -22,8 +22,20 @@ export interface MemberContext {
     /** Dicas e avisos já mostrados a esta pessoa. */
     tips_seen: string[];
     telegram_linked: boolean;
+    /** Lembretes pelo Telegram que esta pessoa quer receber. */
+    reminders: { before_24h: boolean; due: boolean; overdue: boolean };
   };
-  household: { id: string; name: string; timezone: string };
+  household: {
+    id: string;
+    name: string;
+    timezone: string;
+    /** Horário de silêncio (HH:MM, no fuso da casa): nenhum lembrete sai nesse intervalo. */
+    quiet_start: string;
+    quiet_end: string;
+    overdue_reminder_time: string;
+    /** Dias de atraso em que o lembrete diário ainda sai (0 = sem limite). */
+    overdue_reminder_days: number;
+  };
   members: { id: string; display_name: string; role: 'owner' | 'member' }[];
 }
 
@@ -31,9 +43,23 @@ export const preferencesSchema = z
   .object({
     personaIntensity: z.enum(['off', 'light', 'full']).optional(),
     guidanceMode: z.enum(['guided', 'normal']).optional(),
+    reminders: z
+      .object({
+        before24h: z.boolean().optional(),
+        due: z.boolean().optional(),
+        overdue: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
-  .refine((p) => p.personaIntensity || p.guidanceMode, 'nenhuma preferência informada');
+  .refine(
+    (p) =>
+      p.personaIntensity ||
+      p.guidanceMode ||
+      (p.reminders && Object.values(p.reminders).some((v) => v !== undefined)),
+    'nenhuma preferência informada',
+  );
 
 export const trainingSchema = z.discriminatedUnion('action', [
   z.object({ action: z.enum(['start', 'pause', 'resume', 'finish']) }),
@@ -126,6 +152,9 @@ export function createMemberService(db: DbClient) {
         p_actor_member_id: scope.actorMemberId,
         p_persona_intensity: parsed.data.personaIntensity,
         p_guidance_mode: parsed.data.guidanceMode,
+        p_remind_before_24h: parsed.data.reminders?.before24h,
+        p_remind_due: parsed.data.reminders?.due,
+        p_remind_overdue: parsed.data.reminders?.overdue,
       });
     },
 

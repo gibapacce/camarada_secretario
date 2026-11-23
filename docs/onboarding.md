@@ -65,7 +65,7 @@ mensagens.
   `tutorial_paused` e `tips_seen` (dicas já mostradas). Alterações passam por
   `update_member_training`.
 - `cleanup_tutorial_tasks()` apaga treinos com mais de 24 h; é chamada junto das ações de treino e
-  deve entrar no Cron da Fase 8.
+  pela limpeza diária do Cron.
 - Limiares da oferta de saída: `EXIT_AFTER_ACTIONS` e `EXIT_AFTER_DAYS` em
   [engine.ts](../packages/assistant/src/engine.ts).
 - Textos: [training.ts](../packages/assistant/src/training.ts). Veja também

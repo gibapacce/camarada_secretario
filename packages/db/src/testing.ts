@@ -33,7 +33,7 @@ export class PgliteDbClient implements DbClient {
     }
     const entries = Object.entries(args).filter(([, v]) => v !== undefined);
     for (const [key] of entries) {
-      if (!/^p_[a-z_]+$/.test(key)) {
+      if (!/^p_[a-z0-9_]+$/.test(key)) {
         throw new Error(`Argumento inválido: ${key}`);
       }
     }

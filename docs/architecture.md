@@ -89,7 +89,9 @@ novas para continuar compatível com o Supabase.
 
 ### Pendências conhecidas
 
-- Tabelas de lembretes e log da persona entram na Fase 8. O estado do treino e as dicas já
+- Lembretes: ver "Lembretes (Fase 8)" abaixo. O log de variantes da persona
+  (`persona_message_log`) não foi criado: nos lembretes a variante vem da chave. O estado do treino
+  e as dicas já
   existem (`household_members.tutorial_step`, `tutorial_paused`, `tips_seen`; ver
   [onboarding.md](onboarding.md)).
 - Cliente PostgREST validado com o Supabase real (26/10/2026): login ES256, 401 sem token ou com
@@ -153,7 +155,7 @@ do Supabase; o navegador nunca a recebe.
   em lote). O caminho interno nunca sai do Worker. CSP libera `img-src https://*.supabase.co`.
 - **Limites e retenção:** até 10 fotos por tarefa. Remover marca `deleted_at`/`deleted_by` (fica
   o registro de quem removeu) e apaga o arquivo do bucket na hora. Se o bucket falhar na remoção,
-  sobra um arquivo órfão: a varredura periódica entra com o Cron (Fase 8). Fotos de tarefas
+  sobra um arquivo órfão; a varredura periódica ainda não existe (está no backlog). Fotos de tarefas
   canceladas ou concluídas ficam guardadas; apagar a casa apaga os registros em cascata.
 - **Validado com o Supabase real** (26/10/2026): bucket privado e limites, envio, URL temporária,
   sem acesso por endereço público, chave pública, login do usuário ou token adulterado, arquivo
@@ -172,6 +174,37 @@ do Supabase; o navegador nunca a recebe.
 - **Isolamento:** o adaptador (`apps/worker/src/telegram.ts`) é a única parte que conhece a API do
   Telegram (`TelegramPort`). O token nunca aparece em logs.
 - Passo a passo e limites: [telegram.md](telegram.md).
+
+## Lembretes (Fase 8)
+
+- **Agendador:** dois Cron Triggers do Worker (`wrangler.jsonc`). A cada 5 minutos,
+  `claim_reminders` gera os lembretes devidos, cancela os que perderam a validade e reserva um lote
+  de até 20. O Worker monta o texto, envia pelo Telegram e grava o resultado com `finish_reminder`.
+  Às 06:00 UTC, a limpeza apaga o histórico de lembretes com mais de 60 dias e os treinos
+  abandonados (`cleanup_tutorial_tasks`). O Cron também mantém o Supabase Free ativo.
+- **Tipos:** `due` (no prazo; ligado por padrão), `overdue` (atraso, um por dia às 09:00, por até
+  30 dias; ligado) e `before_24h` (24 h antes; desligado). Cada pessoa escolhe no painel, em
+  Preferências (`household_members.remind_*`).
+- **Destinatário:** o responsável, ou todas as pessoas ativas com Telegram quando a tarefa é
+  coletiva. Tarefas de treino, concluídas, canceladas ou sem prazo não geram lembrete.
+- **Silêncio:** nada sai entre `households.quiet_start` e `quiet_end` (21:00 às 09:00). Para
+  calcular horários, o silêncio começa 30 minutos antes (20:30): com o Cron de 5 em 5 minutos, um
+  horário como 20:59 seria pulado. Prazo nessa faixa antecipa o lembrete para o fim do silêncio
+  anterior (tarefa só com data, 23:59, avisa às 09:00 do dia). O de 24 h vai para o limite mais
+  próximo (20:30 ou 09:00) e é omitido se o do prazo sair antes, junto ou já tiver chegado a hora
+  dele. Lembretes anteriores à criação da tarefa não são enviados. O lembrete do prazo vale até
+  2 h depois; após uma queda longa, os perdidos são descartados, não acumulados.
+- **Deduplicação:** `reminder_deliveries.deduplication_key` única por tipo, tarefa, pessoa e prazo
+  (ou dia, no atraso). Mudar o prazo gera chave nova e cancela a antiga.
+- **Concorrência e retry:** a reserva usa `for update skip locked` e vale 10 minutos (se o Worker
+  cair, outro Cron retoma). Falha temporária (429, 5xx, rede) tenta de novo com espera de 2, 4, 8
+  e 16 minutos, até 5 tentativas. 400/403 (chat inexistente, bot bloqueado) é falha definitiva.
+  Se o envio funcionar e a gravação do resultado falhar, o lembrete pode repetir uma vez.
+- **Texto:** `reminderMessage` (`packages/persona/src/reminders.ts`) escolhe a variante pela chave
+  (FNV-1a), então um retry usa a mesma frase; "hoje"/"amanhã" e os dias de atraso são calculados
+  no momento do envio. O lembrete leva o botão "Abrir tarefa".
+- **Ajustes da casa** (sem tela no painel por enquanto; altere por SQL): `quiet_start`,
+  `quiet_end`, `overdue_reminder_time` e `overdue_reminder_days` (0 = todo dia, até 1 ano).
 
 ## Por que não WhatsApp (por enquanto)
 

@@ -57,8 +57,17 @@ function context(intensity: PersonaIntensity): MemberContext {
       tutorial_paused: false,
       tips_seen: [],
       telegram_linked: false,
+      reminders: { before_24h: false, due: true, overdue: true },
     },
-    household: { id: HOUSE, name: 'Casa Teste', timezone: 'America/Sao_Paulo' },
+    household: {
+      id: HOUSE,
+      name: 'Casa Teste',
+      timezone: 'America/Sao_Paulo',
+      quiet_start: '21:00',
+      quiet_end: '09:00',
+      overdue_reminder_time: '09:00',
+      overdue_reminder_days: 30,
+    },
     members: [
       { id: OTHER, display_name: 'Deise', role: 'member' },
       { id: ME, display_name: 'Giba', role: 'owner' },
@@ -296,6 +305,16 @@ describe('App', () => {
     );
     await act(() => Promise.resolve());
     await waitFor(() => expect(api.me.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('liga o lembrete de 24 h e mostra o horário de silêncio da casa', async () => {
+    const api = fakeApi('full');
+    renderApp({ auth: fakeAuth(true), api }, '/preferencias');
+    expect(await screen.findByText(/Silêncio das 21h às 9h/)).toBeDefined();
+    fireEvent.click(screen.getByLabelText(/24 h antes/));
+    await waitFor(() =>
+      expect(api.updatePreferences).toHaveBeenCalledWith({ reminders: { before24h: true } }),
+    );
   });
 
   it('mostra as fotos da tarefa com URL temporária e legenda', async () => {

@@ -69,7 +69,12 @@ const HELP_TOPICS: Record<string, string> = {
     '• "Desfazer" volta a sua última ação (até 15 minutos).',
   ].join('\n'),
   fotos: 'Fotos: por enquanto, anexe pelo painel, na página da tarefa.',
-  lembretes: 'Lembretes automáticos chegam em breve (Fase 8).',
+  lembretes: [
+    'Lembretes (pelo Telegram):',
+    '• No prazo e de atraso (1 por dia, de manhã) já vêm ligados.',
+    '• "24 h antes" é opcional. Ligue ou desligue cada um no painel, em Preferências.',
+    '• À noite fico em silêncio; tarefas coletivas lembram as duas pessoas.',
+  ].join('\n'),
   treino: [
     'Missão de Treino (5 passos, 2 minutos):',
     '• "Treino" começa; "depois" pausa; "continuar treino" retoma.',

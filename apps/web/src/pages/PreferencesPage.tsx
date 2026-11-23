@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import {
   errorText,
-  type GuidanceMode,
   type PersonaIntensity,
+  type PreferencesInput,
   type TelegramLink,
 } from '../lib/api.ts';
 import { useApp } from '../lib/app-context.ts';
@@ -13,12 +13,41 @@ const INTENSITIES: { value: PersonaIntensity; label: string; hint: string }[] = 
   { value: 'off', label: 'Modo sério', hint: 'Textos diretos, sem piadas.' },
 ];
 
+type ReminderKey = keyof NonNullable<PreferencesInput['reminders']>;
+
+const hour = (hhmm: string) => (hhmm.endsWith(':00') ? `${Number(hhmm.slice(0, 2))}h` : hhmm);
+
 export function PreferencesPage() {
   const { api, me, text, refresh } = useApp();
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { reminders } = me.member;
+  const h = me.household;
 
-  async function save(p: { personaIntensity?: PersonaIntensity; guidanceMode?: GuidanceMode }) {
+  const REMINDERS: { key: ReminderKey; checked: boolean; label: string; hint: string }[] = [
+    {
+      key: 'due',
+      checked: reminders.due,
+      label: 'No prazo',
+      hint: 'na hora do prazo; tarefa só com data avisa às ' + hour(h.quiet_end) + ' do dia.',
+    },
+    {
+      key: 'overdue',
+      checked: reminders.overdue,
+      label: 'Atrasadas',
+      hint:
+        `uma vez por dia, às ${hour(h.overdue_reminder_time)}` +
+        (h.overdue_reminder_days > 0 ? `, por até ${h.overdue_reminder_days} dias.` : '.'),
+    },
+    {
+      key: 'before24h',
+      checked: reminders.before_24h,
+      label: '24 h antes',
+      hint: 'um dia antes do prazo.',
+    },
+  ];
+
+  async function save(p: PreferencesInput) {
     setBusy(true);
     setStatus(null);
     try {
@@ -74,6 +103,30 @@ export function PreferencesPage() {
       </fieldset>
 
       <TelegramSection />
+
+      <fieldset className="card" disabled={busy}>
+        <legend>Lembretes no Telegram</legend>
+        {!me.member.telegram_linked && (
+          <p className="muted">Vincule o Telegram acima para receber os lembretes.</p>
+        )}
+        {REMINDERS.map((r) => (
+          <label key={r.key} className="radio">
+            <input
+              type="checkbox"
+              checked={r.checked}
+              onChange={(e) => void save({ reminders: { [r.key]: e.target.checked } })}
+            />
+            <span>
+              <strong>{r.label}</strong>
+              <span className="muted"> — {r.hint}</span>
+            </span>
+          </label>
+        ))}
+        <p className="muted">
+          Silêncio das {hour(h.quiet_start)} às {hour(h.quiet_end)}: nenhum lembrete sai nesse
+          horário. Tarefas coletivas lembram as duas pessoas.
+        </p>
+      </fieldset>
 
       <p role="status" aria-live="polite">
         {status}
