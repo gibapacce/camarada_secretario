@@ -14,17 +14,18 @@ backend valida e executa. A persona é apenas camada de apresentação.
 
 ## Estado atual
 
-| Fase                       | Situação                                                                                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 Viabilidade e decisões   | ✅ Concluída                                                                                                                                |
-| 1 Esqueleto e documentação | ✅ Concluída                                                                                                                                |
-| 2 Banco e regras           | ✅ Concluída (local, PGlite)                                                                                                                |
-| 3 Painel web               | ✅ Concluída localmente (publicação na Fase 9)                                                                                              |
-| 4 Fotos                    | ✅ Concluída localmente (bucket privado no Supabase real)                                                                                   |
-| 5 Assistente (IA)          | ✅ Concluída localmente (regras primeiro, Workers AI opcional)                                                                              |
-| 6 Persona e Modo Aprendiz  | ✅ Concluída localmente, exceto variantes de mensagem e modelos de lembrete (vão com a Fase 8)                                              |
-| 7 Telegram                 | 🟡 Bot `@camarada_ho_chi_miau_bot` publicado com webhook registrado; falta vincular as pessoas. Veja [docs/telegram.md](docs/telegram.md)   |
-| 9 Publicação e operação    | 🟡 Worker + painel publicados em workers.dev e migrations aplicadas; falta o login ponta a ponta. Veja [docs/operacao.md](docs/operacao.md) |
+| Fase                       | Situação                                                                                                                           |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 0 Viabilidade e decisões   | ✅ Concluída                                                                                                                       |
+| 1 Esqueleto e documentação | ✅ Concluída                                                                                                                       |
+| 2 Banco e regras           | ✅ Concluída (local, PGlite)                                                                                                       |
+| 3 Painel web               | ✅ Concluída localmente (publicação na Fase 9)                                                                                     |
+| 4 Fotos                    | ✅ Concluída localmente (bucket privado no Supabase real)                                                                          |
+| 5 Assistente (IA)          | ✅ Concluída localmente (regras primeiro, Workers AI opcional)                                                                     |
+| 6 Persona e Modo Aprendiz  | ✅ Concluída localmente, exceto variantes de mensagem e modelos de lembrete (vão com a Fase 8)                                     |
+| 7 Telegram                 | ✅ Bot `@camarada_ho_chi_miau_bot` publicado e testado (Giba vinculado; Deise pendente). Veja [docs/telegram.md](docs/telegram.md) |
+| 9 Publicação e operação    | ✅ Worker + painel em workers.dev, migrations aplicadas, login e Telegram validados. Veja [docs/operacao.md](docs/operacao.md)     |
+| 8 Agendador e lembretes    | ⏳ Próxima                                                                                                                         |
 
 O projeto Supabase (plano Free, São Paulo) existe, sem o seed. Todas as migrations (fases 2 a 7)
 estão aplicadas. Cadastro público desligado, chave de assinatura ES256. O Worker está publicado em
