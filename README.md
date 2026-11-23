@@ -7,6 +7,7 @@ recorrências, lembretes e painel web, com a personalidade de um gato comunista 
 - Decisões de arquitetura e limites dos planos gratuitos: [docs/architecture.md](docs/architecture.md)
 - Persona e guia de uso: [docs/persona.md](docs/persona.md), [docs/onboarding.md](docs/onboarding.md)
 - Bot do Telegram: [docs/telegram.md](docs/telegram.md)
+- Publicação, backup e recuperação: [docs/operacao.md](docs/operacao.md)
 
 **Princípio central:** o banco de dados é a fonte da verdade. A IA só interpreta mensagens; o
 backend valida e executa. A persona é apenas camada de apresentação.
@@ -22,12 +23,12 @@ backend valida e executa. A persona é apenas camada de apresentação.
 | 4 Fotos                    | ✅ Concluída localmente (bucket privado no Supabase real)                                                                                   |
 | 5 Assistente (IA)          | ✅ Concluída localmente (regras primeiro, Workers AI opcional)                                                                              |
 | 6 Persona e Modo Aprendiz  | ✅ Concluída localmente, exceto variantes de mensagem e modelos de lembrete (vão com a Fase 8)                                              |
-| 7 Telegram                 | 🟡 Código e testes prontos (texto, vinculação, `/painel`); falta criar o bot e publicar o Worker. Veja [docs/telegram.md](docs/telegram.md) |
+| 7 Telegram                 | 🟡 Bot `@camarada_ho_chi_miau_bot` publicado com webhook registrado; falta vincular as pessoas. Veja [docs/telegram.md](docs/telegram.md)   |
+| 9 Publicação e operação    | 🟡 Worker + painel publicados em workers.dev e migrations aplicadas; falta o login ponta a ponta. Veja [docs/operacao.md](docs/operacao.md) |
 
-O projeto Supabase (plano Free, São Paulo) existe, sem o seed. As migrations das fases 2 a 4 foram
-aplicadas; **confira se as mais recentes** (`20261026190000_assistant_state.sql`,
-`20261112100000_training.sql` e `20261112110000_telegram.sql`) também foram. Cadastro público
-desligado, chave de assinatura ES256. O Worker ainda roda só localmente (`wrangler dev`).
+O projeto Supabase (plano Free, São Paulo) existe, sem o seed. Todas as migrations (fases 2 a 7)
+estão aplicadas. Cadastro público desligado, chave de assinatura ES256. O Worker está publicado em
+`camarada-ho-chi-miau` (workers.dev); a Fase 8 (lembretes por Cron) ainda não existe.
 Para aplicar migrations novas, rode o executável do Supabase CLI diretamente
 (`supabase.exe db push --db-url <url>`). Não use `npx supabase ...` com a senha na URL: o npm 12
 repete o comando na tela e no log.
@@ -95,6 +96,7 @@ Wrangler, revise com `npm install-scripts ls` antes de aprovar.
 | `npm run format`    | Prettier (corrige); `format:check` só verifica |
 | `npm run build`     | Gera o painel em `apps/web/dist`               |
 | `npm run dev`       | Painel + Worker local (workerd, sem login)     |
+| `npm run backup`    | Exporta os dados do Supabase para `backups/`   |
 
 ## Custos
 

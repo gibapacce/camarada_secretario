@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --show-interactive-dev-session=false",
+    "deploy": "wrangler deploy --var APP_ENV:production",
     "cf-typegen": "wrangler types",
     "typecheck": "wrangler types && tsc --noEmit",
     "test": "vitest run"

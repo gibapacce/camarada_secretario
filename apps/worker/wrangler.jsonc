@@ -13,6 +13,8 @@
   "vars": {
     "APP_ENV": "development",
     "PHOTO_MAX_BYTES": "5242880",
+    "TELEGRAM_BOT_USERNAME": "camarada_ho_chi_miau_bot",
+    "PANEL_URL": "https://camarada-ho-chi-miau.gibapacce.workers.dev",
   },
   // Cota gratuita: 10.000 Neurons/dia; acima disso a IA falha e o assistente cai nas regras.
   "ai": {
