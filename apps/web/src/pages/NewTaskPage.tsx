@@ -13,6 +13,7 @@ export function NewTaskPage() {
           if (data.kind !== 'create') return;
           await runAction((key) => api.createTask(data.input, key), 'created', {
             undoable: true,
+            title: data.input.title,
             onDone: (r) => r.ok && navigate(`/tarefas/${r.task.id}`, true),
           });
         }}

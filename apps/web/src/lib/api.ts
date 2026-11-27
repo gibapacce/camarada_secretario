@@ -189,3 +189,17 @@ export function createApi(
 export function errorText(error: unknown): string {
   return errorMessage(error instanceof ApiError ? error.code : 'unexpected_error');
 }
+
+// Falhas 5xx que acontecem antes de qualquer gravação.
+const FAILED_BEFORE_WRITE = new Set(['auth_unavailable', 'not_configured', 'storage_unavailable']);
+
+/**
+ * A requisição pode ter sido gravada mesmo sem resposta válida (conexão caiu, erro no servidor
+ * ou corpo ilegível). Recusas 4xx são certas: nada mudou.
+ */
+export function outcomeUnknown(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return true;
+  if (error.status === 0) return true;
+  if (error.status < 300) return error.code === 'unexpected_error';
+  return error.status >= 500 && !FAILED_BEFORE_WRITE.has(error.code);
+}

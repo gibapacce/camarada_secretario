@@ -715,6 +715,10 @@ fieldset {
   flex: 1;
 }
 
+.toast-message {
+  white-space: pre-line;
+}
+
 .toast-error {
   background: var(--red-900);
 }

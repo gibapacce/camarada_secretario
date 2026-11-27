@@ -56,7 +56,11 @@ export function TaskDetailsPage({ id }: { id: string }) {
     action: 'complete' | 'reopen' | 'cancel',
     event: 'completed' | 'reopened' | 'cancelled',
     stop?: boolean,
-  ) => runAction((key) => api.taskAction(task.id, action, key, stop), event, { undoable: true });
+  ) =>
+    runAction((key) => api.taskAction(task.id, action, key, stop), event, {
+      undoable: true,
+      title: task.title,
+    });
 
   if (editing) {
     return (
@@ -73,6 +77,7 @@ export function TaskDetailsPage({ id }: { id: string }) {
             }
             await runAction((key) => api.updateTask(task.id, d.changes, key), 'updated', {
               undoable: true,
+              title: task.title,
               onDone: (r) => r.ok && setEditing(false),
             });
           }}

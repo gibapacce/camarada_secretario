@@ -21,19 +21,28 @@ Cada pessoa escolhe a sua, no painel (Preferências) ou na conversa. O padrão �
   vindos do banco. A piada vem depois e é opcional.
 - **Assuntos sensíveis** (saúde, luto, dívidas) usam tom neutro em qualquer nível
   (`isSensitive`, em `panel.ts`).
-- **Nunca confirmar o que não aconteceu.** Em erro, o texto diz que nada foi registrado.
+- **Nunca confirmar o que não aconteceu.** Confirmações citam a tarefa afetada e o que mudou
+  (ex.: o novo prazo ao adiar); se nada mudou ("já estava concluída"), o texto diz isso e o painel
+  não oferece "Desfazer".
+- **Deixar claro quando a ação ainda não foi feita.** Ao pedir confirmação, escolher entre tarefas
+  parecidas ou completar um dado, o bot pede só o que falta e diz que ainda não fez nada.
+- **Falha certa × resultado incerto.** Se o servidor recusou, o texto diz o motivo e que nada foi
+  alterado. Se a resposta não chegou (conexão caiu, banco sem resposta, erro 5xx), o texto não
+  afirma nada: diz que não conseguiu confirmar e pede para conferir antes de repetir
+  (`failureMessage`, com `uncertain`).
 - **Tudo funciona com a persona desligada.** As mensagens de ajuda, treino e dicas existem nas duas
   versões.
 - Sem imagens ou textos protegidos por direitos autorais; o mascote é um SVG próprio.
 
 ## Onde cada texto mora
 
-| O quê                                        | Arquivo                                              |
-| -------------------------------------------- | ---------------------------------------------------- |
-| Rótulos do painel e avisos de ação           | [panel.ts](../packages/persona/src/panel.ts)         |
-| Mensagens de erro com códigos estáveis       | `errorMessage`, em `panel.ts`                        |
-| Ajuda, sugestões numeradas e modos           | [replies.ts](../packages/assistant/src/replies.ts)   |
-| Boas-vindas, passos do treino, dicas e saída | [training.ts](../packages/assistant/src/training.ts) |
+| O quê                                            | Arquivo                                              |
+| ------------------------------------------------ | ---------------------------------------------------- |
+| Rótulos do painel e avisos de ação               | [panel.ts](../packages/persona/src/panel.ts)         |
+| Confirmações (o que mudou, desfeito, nada mudou) | [results.ts](../packages/persona/src/results.ts)     |
+| Mensagens de erro e de falha                     | `errorMessage` e `failureMessage`, em `panel.ts`     |
+| Ajuda, sugestões numeradas e modos               | [replies.ts](../packages/assistant/src/replies.ts)   |
+| Boas-vindas, passos do treino, dicas e saída     | [training.ts](../packages/assistant/src/training.ts) |
 
 Esses textos são fixos e baseados em regras, **sem IA**: não gastam a cota gratuita e funcionam
 com a IA fora do ar. A IA só interpreta o que a pessoa escreveu; o backend valida e executa.

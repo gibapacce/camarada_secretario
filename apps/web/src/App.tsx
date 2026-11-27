@@ -1,7 +1,14 @@
-import { actionMessage, failureMessage, panelText, type PanelEvent } from '@camarada/persona';
+import {
+  failureMessage,
+  isNoop,
+  panelText,
+  resultMessage,
+  type MessageFormat,
+  type PanelEvent,
+} from '@camarada/persona';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Mascot } from './components/Mascot.tsx';
-import { ApiError, errorText, type Api, type TaskResult } from './lib/api.ts';
+import { ApiError, errorText, outcomeUnknown, type Api, type TaskResult } from './lib/api.ts';
 import {
   AppContext,
   useApp,
@@ -132,6 +139,16 @@ function Shell({ services }: { services: Services }) {
 
   const intensity = me?.member.persona_intensity ?? 'full';
 
+  const format = useMemo<MessageFormat | null>(() => {
+    if (!me) return null;
+    const shared = panelText(me.member.persona_intensity).shared;
+    const names = new Map(me.members.map((m) => [m.id, m.display_name]));
+    return {
+      tz: me.household.timezone,
+      memberName: (id) => (id ? (names.get(id) ?? 'Ex-membro') : shared),
+    };
+  }, [me]);
+
   const runAction = useCallback(
     async (
       fn: (key: string) => Promise<TaskResult>,
@@ -141,35 +158,44 @@ function Shell({ services }: { services: Services }) {
       setPending(true);
       try {
         const result = await fn(crypto.randomUUID());
-        if (result.ok) {
+        if (result.ok && format) {
+          const before = options.title ? { title: options.title } : undefined;
           setToast({
             id: Date.now(),
             kind: 'ok',
-            message: actionMessage(event, result.task.title, intensity),
-            undoable: options.undoable === true,
+            message: resultMessage(event, result, intensity, format, before),
+            // Sem mudança, "Desfazer" reverteria outra ação.
+            undoable: options.undoable === true && !isNoop(result.event),
           });
         }
         options.onDone?.(result);
         refresh();
       } catch (e) {
+        const uncertain = outcomeUnknown(e);
         setToast({
           id: Date.now(),
           kind: 'error',
-          message: `${failureMessage(intensity)} ${errorText(e)}`,
+          message: failureMessage(intensity, {
+            event,
+            ...(options.title && { title: options.title }),
+            code: e instanceof ApiError ? e.code : 'unexpected_error',
+            uncertain,
+          }),
           undoable: false,
         });
+        // Mostrar o estado real para a pessoa conferir antes de repetir.
+        if (uncertain) refresh();
         if (e instanceof ApiError && e.status === 401) void auth.signOut();
       } finally {
         setPending(false);
       }
     },
-    [intensity, refresh, auth],
+    [intensity, format, refresh, auth],
   );
 
   const ctx = useMemo<AppContextValue | null>(() => {
-    if (!me) return null;
+    if (!me || !format) return null;
     const text = panelText(me.member.persona_intensity);
-    const names = new Map(me.members.map((m) => [m.id, m.display_name]));
     return {
       api,
       me,
@@ -178,11 +204,11 @@ function Shell({ services }: { services: Services }) {
       tz: me.household.timezone,
       version,
       refresh,
-      memberName: (id) => (id ? (names.get(id) ?? 'Ex-membro') : text.shared),
+      memberName: format.memberName,
       pending,
       runAction,
     };
-  }, [api, me, version, refresh, runAction, pending]);
+  }, [api, me, format, version, refresh, runAction, pending]);
 
   if (!ctx) {
     const notMember = meError instanceof ApiError && meError.code === 'not_a_member';
@@ -238,7 +264,7 @@ function Shell({ services }: { services: Services }) {
         <div className="toast-region" role="status" aria-live="polite">
           {toast && (
             <div className={`toast toast-${toast.kind}`}>
-              <span>{toast.message}</span>
+              <span className="toast-message">{toast.message}</span>
               {toast.undoable && (
                 <button
                   type="button"

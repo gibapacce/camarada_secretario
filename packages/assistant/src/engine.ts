@@ -8,10 +8,11 @@ import {
   type TaskService,
 } from '@camarada/db';
 import {
-  actionMessage,
   errorMessage,
   failureMessage,
+  isNoop,
   panelText,
+  resultMessage,
   type PanelEvent,
 } from '@camarada/persona';
 import {
@@ -28,6 +29,7 @@ import { z } from 'zod';
 import { intentSchema, type Intent, type IntentOf, type TaskRef } from './intents.ts';
 import type { ChatModel } from './model.ts';
 import {
+  formatOf,
   helpReply,
   listReply,
   modeReply,
@@ -54,6 +56,15 @@ const EXIT_AFTER_DAYS = 14;
 const ACTIONS = ['complete', 'reopen', 'cancel', 'details', 'update'] as const;
 type Action = (typeof ACTIONS)[number];
 
+/** Verbo da ação, o que dizer enquanto ela não aconteceu e onde a tarefa foi procurada. */
+const ACTION_TEXT: Record<Action, { verb: string; notDone: string; pool: string }> = {
+  complete: { verb: 'concluir', notDone: 'concluí', pool: ' pendentes' },
+  reopen: { verb: 'reabrir', notDone: 'reabri', pool: ' concluídas' },
+  cancel: { verb: 'cancelar', notDone: 'cancelei', pool: ' pendentes' },
+  update: { verb: 'alterar', notDone: 'alterei', pool: ' pendentes' },
+  details: { verb: 'ver', notDone: '', pool: '' },
+};
+
 const stateSchema = z.object({
   list: z.array(z.uuid()).max(MAX_LIST).optional(),
   pending: z
@@ -68,6 +79,7 @@ const stateSchema = z.object({
         kind: z.literal('confirm'),
         action: z.enum(['complete', 'cancel']),
         id: z.uuid(),
+        title: z.string().max(200).optional(),
       }),
       z.object({ kind: z.literal('suggest'), options: z.array(intentSchema).min(1).max(5) }),
       z.object({ kind: z.literal('exit') }),
@@ -112,6 +124,8 @@ interface Turn {
   event?: 'create' | 'list' | 'complete' | 'summary' | 'next';
   tutorialTask?: boolean;
   tip?: TipKey;
+  /** Gravação em andamento: se falhar sem resposta, o resultado é incerto. */
+  attempt?: { event: PanelEvent | null; title?: string } | undefined;
 }
 
 const MAX_TEXT = 1000;
@@ -188,10 +202,7 @@ export function createAssistant(deps: AssistantDeps) {
         reply = await dispatch(turn, intent);
         reply += await afterReply(turn, intent);
       } catch (error) {
-        reply =
-          error instanceof DomainError && !['db_error', 'db_unavailable'].includes(error.code)
-            ? errorMessage(error.code)
-            : `${failureMessage(turn.rc.intensity)}${error instanceof DomainError ? ` ${errorMessage(error.code)}` : ''}`;
+        reply = failureReply(turn, error);
       }
     }
 
@@ -199,6 +210,36 @@ export function createAssistant(deps: AssistantDeps) {
       .set({ householdId: member.member.household_id, memberId: member.member.id }, turn.next)
       .catch(() => console.warn('assistant_state_failed'));
     return { reply, intent: intent?.type ?? 'unknown', usedAi, changed: turn.changed };
+  }
+
+  function failureReply(turn: Turn, error: unknown): string {
+    const code = error instanceof DomainError ? error.code : 'unexpected_error';
+    const a = turn.attempt;
+    if (!a && !['db_error', 'db_unavailable', 'unexpected_error'].includes(code)) {
+      return errorMessage(code);
+    }
+    // Sem resposta do banco no meio de uma gravação, ela pode ter acontecido.
+    const uncertain = a !== undefined && (code === 'db_unavailable' || code === 'unexpected_error');
+    return failureMessage(turn.rc.intensity, {
+      ...(a?.event && { event: a.event }),
+      ...(a?.title && { title: a.title }),
+      code,
+      uncertain,
+      channel: 'chat',
+    });
+  }
+
+  /** Marca a gravação em curso para que uma falha sem resposta não seja dada como "nada mudou". */
+  async function write<T>(
+    turn: Turn,
+    event: PanelEvent | null,
+    title: string | undefined,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    turn.attempt = { event, ...(title !== undefined && { title }) };
+    const r = await fn();
+    turn.attempt = undefined;
+    return r;
   }
 
   function suggest(turn: Turn, text: string): string {
@@ -325,17 +366,21 @@ export function createAssistant(deps: AssistantDeps) {
       case 'out_of_scope':
         return outOfScopeReply(turn.rc.intensity);
       case 'set_persona': {
-        await deps.members.updatePreferences(
-          { householdId: turn.member.member.household_id, actorMemberId: turn.member.member.id },
-          { personaIntensity: intent.intensity },
+        await write(turn, null, undefined, () =>
+          deps.members.updatePreferences(
+            { householdId: turn.member.member.household_id, actorMemberId: turn.member.member.id },
+            { personaIntensity: intent.intensity },
+          ),
         );
         turn.changed = true;
         return modeReply(intent.intensity);
       }
       case 'set_guidance': {
-        await deps.members.updatePreferences(
-          { householdId: turn.member.member.household_id, actorMemberId: turn.member.member.id },
-          { guidanceMode: intent.mode },
+        await write(turn, null, undefined, () =>
+          deps.members.updatePreferences(
+            { householdId: turn.member.member.household_id, actorMemberId: turn.member.member.id },
+            { guidanceMode: intent.mode },
+          ),
         );
         turn.changed = true;
         return intent.mode === 'guided'
@@ -349,7 +394,9 @@ export function createAssistant(deps: AssistantDeps) {
       case 'weekly_summary':
         return summary(turn);
       case 'undo': {
-        const r = await deps.tasks.undoLastAction({ ...scopeOf(turn), idempotencyKey: turn.key });
+        const r = await write(turn, 'undone', undefined, () =>
+          deps.tasks.undoLastAction({ ...scopeOf(turn), idempotencyKey: turn.key }),
+        );
         return result(turn, r, 'undone');
       }
       case 'complete_task':
@@ -389,22 +436,30 @@ export function createAssistant(deps: AssistantDeps) {
   async function createTask(turn: Turn, intent: IntentOf<'create_task'>): Promise<string> {
     const due = dueAt(turn, intent.date, intent.time);
     const assignee = assigneeId(turn, intent.assignee);
-    const r = await deps.tasks.createTask({
-      ...scopeOf(turn),
-      title: intent.title,
-      assignedToMemberId: assignee ?? null,
-      ...(due && { dueAt: due }),
-      ...(intent.priority && { priority: intent.priority }),
-      ...(turn.training === 'active' &&
-        turn.member.member.tutorial_step === 1 && { isTutorial: true }),
-      idempotencyKey: turn.key,
-    });
-    if (!r.ok) return errorMessage(r.error);
+    const r = await write(turn, 'created', intent.title, () =>
+      deps.tasks.createTask({
+        ...scopeOf(turn),
+        title: intent.title,
+        assignedToMemberId: assignee ?? null,
+        ...(due && { dueAt: due }),
+        ...(intent.priority && { priority: intent.priority }),
+        ...(turn.training === 'active' &&
+          turn.member.member.tutorial_step === 1 && { isTutorial: true }),
+        idempotencyKey: turn.key,
+      }),
+    );
+    if (!r.ok) {
+      return failureMessage(turn.rc.intensity, {
+        event: 'created',
+        title: intent.title,
+        code: r.error,
+      });
+    }
     turn.changed = !r.task.is_tutorial;
     turn.event = 'create';
     turn.tutorialTask = r.task.is_tutorial;
     if (!due) turn.tip = 'due_date';
-    return `${actionMessage('created', r.task.title, turn.rc.intensity)}\n${taskFacts(turn.rc, r.task)}`;
+    return resultMessage('created', r, turn.rc.intensity, formatOf(turn.rc));
   }
 
   async function listTasks(turn: Turn, intent: IntentOf<'list_tasks'>): Promise<string> {
@@ -564,11 +619,16 @@ export function createAssistant(deps: AssistantDeps) {
     update?: IntentOf<'update_task'>,
   ): Promise<string> {
     const r = await resolve(turn, action, ref);
+    const { notDone, pool } = ACTION_TEXT[action];
+    const nothingYet = notDone ? `, então ainda não ${notDone} nada` : '';
     if (r.kind === 'no_list') {
-      return 'Primeiro peça a lista ("pendentes") para eu saber qual é o número, ou diga o nome da tarefa.';
+      return `Não sei qual é a tarefa número ${ref.index}${nothingYet}. Peça a lista ("pendentes") ou diga o nome da tarefa.`;
     }
     if (r.kind === 'none') {
-      return `Não encontrei ${ref.query ? `"${ref.query}"` : `o número ${ref.index}`} entre as tarefas. Diga "pendentes" para ver a lista.`;
+      const what = ref.query ? `"${ref.query}"` : `o número ${ref.index}`;
+      const where = ref.query ? `entre as tarefas${pool}` : 'na última lista';
+      const changed = notDone ? ', então nada foi alterado' : '';
+      return `Não encontrei ${what} ${where}${changed}. Diga "pendentes" para ver a lista.`;
     }
     if (r.kind === 'many') {
       turn.next = {
@@ -580,14 +640,13 @@ export function createAssistant(deps: AssistantDeps) {
           ...(update && { update }),
         },
       };
-      const head =
-        turn.rc.intensity === 'full'
-          ? 'Miau? Encontrei várias parecidas. Qual delas, camarada?'
-          : 'Encontrei várias parecidas. Qual delas?';
+      const question = notDone
+        ? `Encontrei ${r.tasks.length} parecidas e ainda não ${notDone} nenhuma. Qual delas?`
+        : `Encontrei ${r.tasks.length} parecidas. Qual delas?`;
       return [
-        head,
+        turn.rc.intensity === 'full' ? `Miau? ${question}` : question,
         ...r.tasks.map((t, i) => taskLine(turn.rc, t, i + 1)),
-        `Responda com o número.`,
+        'Responda com o número.',
       ].join('\n');
     }
     return act(turn, action, r.task, update);
@@ -607,17 +666,36 @@ export function createAssistant(deps: AssistantDeps) {
       (action === 'complete' || action === 'cancel') &&
       task.status !== 'completed'
     ) {
-      turn.next = { ...turn.next, pending: { kind: 'confirm', action, id: task.id } };
-      return `${action === 'complete' ? 'Concluir' : 'Cancelar'} "${task.title}"? Responda "sim" ou "não".`;
+      turn.next = {
+        ...turn.next,
+        pending: { kind: 'confirm', action, id: task.id, title: task.title },
+      };
+      const { verb, notDone } = ACTION_TEXT[action];
+      return `${verb[0]?.toUpperCase()}${verb.slice(1)} "${task.title}"? Ainda não ${notDone}: responda "sim" ou "não".`;
     }
     const scope = { ...scopeOf(turn), taskId: task.id, idempotencyKey: turn.key };
     switch (action) {
       case 'complete':
-        return result(turn, await deps.tasks.completeTask(scope), 'completed');
+        return result(
+          turn,
+          await write(turn, 'completed', task.title, () => deps.tasks.completeTask(scope)),
+          'completed',
+          task,
+        );
       case 'reopen':
-        return result(turn, await deps.tasks.reopenTask(scope), 'reopened');
+        return result(
+          turn,
+          await write(turn, 'reopened', task.title, () => deps.tasks.reopenTask(scope)),
+          'reopened',
+          task,
+        );
       case 'cancel':
-        return result(turn, await deps.tasks.cancelTask(scope), 'cancelled');
+        return result(
+          turn,
+          await write(turn, 'cancelled', task.title, () => deps.tasks.cancelTask(scope)),
+          'cancelled',
+          task,
+        );
       case 'details': {
         turn.next = { list: [task.id] };
         const lines = [taskLine(turn.rc, task), taskFacts(turn.rc, task)];
@@ -641,47 +719,52 @@ export function createAssistant(deps: AssistantDeps) {
         const a = assigneeId(turn, update?.assignee);
         if (a !== undefined) changes.assignedToMemberId = a;
         if (update?.priority) changes.priority = update.priority;
-        if (Object.keys(changes).length === 0)
-          return 'O que você quer mudar nessa tarefa? Ex.: "adiar louça para sexta".';
-        const r = await deps.tasks.updateTask({ ...scope, changes });
-        const text = result(turn, r, 'updated');
-        return r.ok ? `${text}\n${taskFacts(turn.rc, r.task)}` : text;
+        if (Object.keys(changes).length === 0) {
+          return `Ainda não mudei nada em "${task.title}". O que você quer mudar? Ex.: "adiar ${task.title.toLowerCase()} para sexta às 18h".`;
+        }
+        const r = await write(turn, 'updated', task.title, () =>
+          deps.tasks.updateTask({ ...scope, changes }),
+        );
+        return result(turn, r, 'updated', task);
       }
     }
   }
 
-  function result(turn: Turn, r: TaskResult, event: PanelEvent): string {
-    if (!r.ok) return errorMessage(r.error);
-    if (
-      r.event !== 'task_already_completed' &&
-      r.event !== 'task_already_open' &&
-      r.event !== 'task_already_cancelled'
-    ) {
-      turn.changed ||= !r.task.is_tutorial;
+  function result(turn: Turn, r: TaskResult, event: PanelEvent, before?: Task): string {
+    if (!r.ok) {
+      if (event === 'undone') return errorMessage(r.error);
+      const title = r.task?.title ?? before?.title;
+      return failureMessage(turn.rc.intensity, {
+        event,
+        ...(title && { title }),
+        code: r.error,
+      });
     }
-    if (r.event === 'task_already_completed') return `"${r.task.title}" já estava concluída.`;
-    if (r.event === 'task_already_open') return `"${r.task.title}" já estava pendente.`;
-    if (r.event === 'task_already_cancelled') return `"${r.task.title}" já estava cancelada.`;
+    if (isNoop(r.event)) return resultMessage(event, r, turn.rc.intensity, formatOf(turn.rc));
+    turn.changed ||= !r.task.is_tutorial;
     if (event === 'completed') {
       turn.event = 'complete';
       turn.tutorialTask = r.task.is_tutorial;
       turn.tip = 'undo';
     }
-    let text = actionMessage(event, r.task.title, turn.rc.intensity);
-    const next = (r as { next_task?: Task | null }).next_task;
-    if (next?.due_at) text += `\n🔁 Próxima: ${formatDateTime(next.due_at, turn.rc.tz)}.`;
-    return text;
+    return resultMessage(event, r, turn.rc.intensity, formatOf(turn.rc), before);
   }
 
   async function choose(turn: Turn, index: number): Promise<string> {
     const p = turn.state.pending;
     if (p?.kind === 'suggest') {
       const option = p.options[index - 1];
-      return option ? dispatch(turn, option) : `Responda um número de 1 a ${p.options.length}.`;
+      if (option) return dispatch(turn, option);
+      turn.next = { ...turn.next, pending: p };
+      return `Responda um número de 1 a ${p.options.length}.`;
     }
     if (p?.kind === 'choose') {
       const id = p.ids[index - 1];
-      if (!id) return `Responda um número de 1 a ${p.ids.length}.`;
+      if (!id) {
+        // Manter a pergunta aberta para a resposta seguinte.
+        turn.next = { ...turn.next, pending: p };
+        return `Responda um número de 1 a ${p.ids.length}.`;
+      }
       const d = await deps.tasks.getTask({
         householdId: turn.member.member.household_id,
         taskId: id,
@@ -700,9 +783,11 @@ export function createAssistant(deps: AssistantDeps) {
     const p = turn.state.pending;
     if (p?.kind === 'exit') {
       if (!yes) return 'Ok, continuo com as dicas. Para ajuda, é só dizer "ajuda".';
-      await deps.members.updatePreferences(
-        { householdId: turn.member.member.household_id, actorMemberId: turn.member.member.id },
-        { guidanceMode: 'normal' },
+      await write(turn, null, undefined, () =>
+        deps.members.updatePreferences(
+          { householdId: turn.member.member.household_id, actorMemberId: turn.member.member.id },
+          { guidanceMode: 'normal' },
+        ),
       );
       turn.changed = true;
       return 'Combinado: Modo Aprendiz desligado. A ajuda continua disponível: diga "ajuda".';
@@ -710,7 +795,7 @@ export function createAssistant(deps: AssistantDeps) {
     if (p?.kind !== 'confirm') {
       return yes ? 'Não há nada para confirmar agora.' : 'Ok.';
     }
-    if (!yes) return 'Ok, nada foi feito.';
+    if (!yes) return p.title ? `Ok, "${p.title}" continua como estava.` : 'Ok, nada foi feito.';
     const d = await deps.tasks.getTask({
       householdId: turn.member.member.household_id,
       taskId: p.id,
