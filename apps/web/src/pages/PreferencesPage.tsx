@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   errorText,
+  outcomeUnknown,
   type PersonaIntensity,
   type PreferencesInput,
   type TelegramLink,
@@ -55,7 +56,12 @@ export function PreferencesPage() {
       setStatus('Preferência salva.');
       refresh();
     } catch (e) {
-      setStatus(`${errorText(e)} Nada foi alterado.`);
+      if (outcomeUnknown(e)) {
+        setStatus('Não consegui confirmar se a preferência foi salva. Confira a opção marcada.');
+        refresh();
+      } else {
+        setStatus(`${errorText(e)} Nada foi alterado.`);
+      }
     } finally {
       setBusy(false);
     }

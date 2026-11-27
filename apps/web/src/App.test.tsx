@@ -239,7 +239,9 @@ describe('App', () => {
     const [input, key] = api.createTask.mock.calls[0] ?? [];
     expect(input).toEqual({ title: 'Varrer a sala', priority: 'normal', assignedToMemberId: null });
     expect(key).toMatch(UUID_RE);
-    expect(await screen.findByText('Tarefa criada: "Varrer a sala".')).toBeDefined();
+    const toast = await screen.findByRole('status');
+    await waitFor(() => expect(toast.textContent).toContain('Tarefa criada: "Varrer a sala".'));
+    expect(toast.textContent).toContain('Responsável: Giba');
     expect(window.location.pathname).toBe('/tarefas/00000000-0000-4000-8000-0000000000b1');
   });
 
@@ -276,16 +278,70 @@ describe('App', () => {
     expect(api.undo.mock.calls[0]?.[0]).toMatch(UUID_RE);
   });
 
-  it('em falha diz claramente que nada foi registrado', async () => {
-    const api = fakeApi('full');
+  it('sem resposta do servidor não diz que nada foi registrado e pede para conferir', async () => {
+    const api = fakeApi('off');
     api.createTask.mockImplementation(() => Promise.reject(new ApiError(503, 'db_unavailable')));
     renderApp({ auth: fakeAuth(true), api }, '/tarefas/nova');
     fireEvent.change(await screen.findByLabelText('Título'), { target: { value: 'Varrer' } });
     fireEvent.click(screen.getByRole('button', { name: 'Criar' }));
     const toast = await screen.findByRole('status');
-    await waitFor(() => expect(toast.textContent).toContain('Nada foi registrado.'));
-    expect(toast.textContent).toContain('O banco está indisponível.');
+    await waitFor(() =>
+      expect(toast.textContent).toContain(
+        'Não consegui confirmar se a tarefa "Varrer" foi criada.',
+      ),
+    );
+    expect(toast.textContent).toContain('Confira na tela antes de tentar de novo');
+    expect(toast.textContent).not.toContain('Nada foi');
     expect(window.location.pathname).toBe('/tarefas/nova');
+  });
+
+  it('recusa do servidor diz qual tarefa, o motivo e que nada foi alterado', async () => {
+    const api = fakeApi('off');
+    api.taskAction.mockImplementation(() => Promise.reject(new ApiError(409, 'task_cancelled')));
+    renderApp({ auth: fakeAuth(true), api }, '/tarefas');
+    fireEvent.click(await screen.findByRole('button', { name: 'Concluir "Lavar a louça"' }));
+    const toast = await screen.findByRole('status');
+    await waitFor(() =>
+      expect(toast.textContent).toContain(
+        'Não consegui concluir a tarefa "Lavar a louça". A tarefa está cancelada. Nada foi alterado.',
+      ),
+    );
+  });
+
+  it('ao editar, o aviso mostra o novo prazo; sem mudança não oferece desfazer', async () => {
+    const api = fakeApi('off');
+    api.updateTask.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true as const,
+        event: 'task_updated',
+        task: task({ due_at: '2026-10-30T21:00:00Z' }),
+        changes: { due_at: '2026-10-30T21:00:00+00:00' },
+      }),
+    );
+    renderApp({ auth: fakeAuth(true), api }, `/tarefas/${task().id}`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+    fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '18:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    const toast = await screen.findByRole('status');
+    await waitFor(() =>
+      expect(toast.textContent).toContain(
+        'Tarefa atualizada: "Lavar a louça".\n⏰ Novo prazo: sex., 30/10, 18:00.',
+      ),
+    );
+    expect(within(toast).getByRole('button', { name: 'Desfazer' })).toBeDefined();
+
+    api.taskAction.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true as const,
+        event: 'task_already_completed',
+        task: { ...task(), status: 'completed' as const },
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Concluir' }));
+    await waitFor(() =>
+      expect(toast.textContent).toContain('"Lavar a louça" já estava concluída. Nada mudou.'),
+    );
+    expect(within(toast).queryByRole('button', { name: 'Desfazer' })).toBeNull();
   });
 
   it('login sem casa vinculada mostra aviso', async () => {
@@ -365,6 +421,19 @@ describe('App', () => {
     expect(text).toBe('tarefa: varrer');
     expect(key).toMatch(UUID_RE);
     await waitFor(() => expect(api.me.mock.calls.length).toBeGreaterThan(meCalls));
+  });
+
+  it('conversa sem resposta: não afirma que nada foi registrado', async () => {
+    const api = fakeApi('full');
+    api.assistant.mockImplementation(() => Promise.reject(new ApiError(0, 'network_error')));
+    renderApp({ auth: fakeAuth(true), api }, '/conversar');
+    fireEvent.change(await screen.findByLabelText('Mensagem'), {
+      target: { value: 'feito 1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    expect(
+      await screen.findByText(/Não sei se sua mensagem foi processada: a resposta não chegou\./),
+    ).toBeDefined();
   });
 
   it('Primeiros passos: copia um exemplo e rotula neutro no modo sério', async () => {

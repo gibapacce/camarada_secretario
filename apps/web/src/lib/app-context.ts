@@ -4,6 +4,8 @@ import type { Api, MemberContext, PersonaIntensity, TaskResult } from './api.ts'
 
 export interface ActionOptions {
   undoable?: boolean;
+  /** Título da tarefa afetada, para a mensagem de falha citar qual foi. */
+  title?: string;
   onDone?: (result: TaskResult) => void;
 }
 

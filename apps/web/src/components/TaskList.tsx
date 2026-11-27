@@ -75,6 +75,7 @@ function TaskRow({ task }: { task: Task }) {
           onClick={() =>
             runAction((key) => api.taskAction(task.id, 'complete', key), 'completed', {
               undoable: true,
+              title: task.title,
             })
           }
         >
@@ -89,6 +90,7 @@ function TaskRow({ task }: { task: Task }) {
           onClick={() =>
             runAction((key) => api.taskAction(task.id, 'reopen', key), 'reopened', {
               undoable: true,
+              title: task.title,
             })
           }
         >

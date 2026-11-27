@@ -168,9 +168,64 @@ export function actionMessage(
   return level === 'full' ? base + (FULL_SPICE[event] ?? '') : base;
 }
 
-export function failureMessage(intensity: PersonaIntensity): string {
-  const base = 'Não consegui concluir a operação. Nada foi registrado.';
-  return intensity === 'full' ? `😿 ${base} (O imperialismo da internet ataca outra vez.)` : base;
+const ATTEMPT: Record<PanelEvent, { attempt: string; outcome: string }> = {
+  created: { attempt: 'criar a tarefa{t}', outcome: 'a tarefa{t} foi criada' },
+  updated: {
+    attempt: 'salvar as mudanças na tarefa{t}',
+    outcome: 'as mudanças na tarefa{t} foram salvas',
+  },
+  completed: { attempt: 'concluir a tarefa{t}', outcome: 'a tarefa{t} foi concluída' },
+  reopened: { attempt: 'reabrir a tarefa{t}', outcome: 'a tarefa{t} foi reaberta' },
+  cancelled: { attempt: 'cancelar a tarefa{t}', outcome: 'a tarefa{t} foi cancelada' },
+  undone: { attempt: 'desfazer a última ação', outcome: 'a última ação foi desfeita' },
+  photo_added: { attempt: 'anexar a foto à tarefa{t}', outcome: 'a foto foi anexada à tarefa{t}' },
+  photo_removed: {
+    attempt: 'remover a foto da tarefa{t}',
+    outcome: 'a foto foi removida da tarefa{t}',
+  },
+};
+
+export interface FailureOptions {
+  /** O que se tentou fazer; sem ele o texto fica genérico. */
+  event?: PanelEvent;
+  title?: string;
+  /** Código de erro estável (ver `errorMessage`). */
+  code?: string;
+  /**
+   * A resposta não chegou ou veio quebrada: a ação pode ter sido gravada.
+   * Nesse caso o texto não diz que nada mudou; pede para conferir antes de repetir.
+   */
+  uncertain?: boolean;
+  /** Onde a pessoa confere o resultado: na tela do painel ou pedindo a lista na conversa. */
+  channel?: 'panel' | 'chat';
+}
+
+/** Falha sem dar a ação como feita: diz o que não deu certo e o próximo passo. */
+export function failureMessage(intensity: PersonaIntensity, o: FailureOptions = {}): string {
+  const t = o.title ? ` "${o.title}"` : '';
+  const phrase = o.event ? ATTEMPT[o.event] : { attempt: 'fazer isso', outcome: 'deu certo' };
+  const fill = (s: string) => s.replace('{t}', () => t);
+  let text: string;
+  if (o.uncertain) {
+    const why =
+      o.code === 'network_error'
+        ? ' A conexão caiu antes da resposta.'
+        : o.code === 'db_unavailable'
+          ? ' O banco de dados não respondeu.'
+          : ' A resposta não chegou completa.';
+    const check =
+      o.channel === 'chat'
+        ? 'Diga "pendentes" para conferir antes de repetir'
+        : 'Confira na tela antes de tentar de novo';
+    const twice = o.event === 'created' ? ', para não criar em dobro' : '';
+    text = `Não consegui confirmar se ${fill(phrase.outcome)}.${why} ${check}${twice}.`;
+  } else {
+    const known = o.code !== undefined && o.code in ERROR_TEXT;
+    text = known
+      ? `Não consegui ${fill(phrase.attempt)}. ${errorMessage(o.code ?? '')} Nada foi alterado.`
+      : `Não consegui ${fill(phrase.attempt)}. Nada foi alterado; pode tentar de novo.`;
+  }
+  return intensity === 'full' && !(o.title && isSensitive(o.title)) ? `😿 ${text}` : text;
 }
 
 const ERROR_TEXT: Record<string, string> = {

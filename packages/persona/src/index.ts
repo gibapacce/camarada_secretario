@@ -15,7 +15,17 @@ export {
   failureMessage,
   isSensitive,
   panelText,
+  type FailureOptions,
   type PanelEvent,
   type PanelText,
 } from './panel.ts';
+export {
+  changeLines,
+  factLines,
+  isNoop,
+  resultMessage,
+  type ActionResult,
+  type MessageFormat,
+  type ResultTask,
+} from './results.ts';
 export { reminderMessage, type ReminderInput, type ReminderType } from './reminders.ts';

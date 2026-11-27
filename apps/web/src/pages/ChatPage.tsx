@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { errorText } from '../lib/api.ts';
+import { errorText, outcomeUnknown } from '../lib/api.ts';
 import { useApp } from '../lib/app-context.ts';
 import { navigate, useSearch } from '../lib/router.tsx';
 
@@ -34,7 +34,15 @@ export function ChatPage() {
       add('bot', r.reply);
       if (r.changed) refresh();
     } catch (err) {
-      add('bot', `Não consegui responder. ${errorText(err)} Nada foi registrado.`);
+      if (outcomeUnknown(err)) {
+        add(
+          'bot',
+          'Não sei se sua mensagem foi processada: a resposta não chegou. Confira as tarefas antes de enviar de novo, para não repetir a ação.',
+        );
+        refresh();
+      } else {
+        add('bot', `Não consegui processar a mensagem. ${errorText(err)} Nada foi alterado.`);
+      }
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,5 @@
 import type { Task } from '@camarada/db';
-import { panelText, type PersonaIntensity } from '@camarada/persona';
+import { factLines, panelText, type MessageFormat, type PersonaIntensity } from '@camarada/persona';
 import { formatDateTime } from '@camarada/shared';
 import type { Intent } from './intents.ts';
 
@@ -29,10 +29,11 @@ export function taskLine(ctx: ReplyContext, t: Task, index?: number): string {
 }
 
 export function taskFacts(ctx: ReplyContext, t: Task): string {
-  return [
-    `👤 Responsável: ${who(ctx, t.assigned_to_member_id)}`,
-    `⏰ Prazo: ${t.due_at ? formatDateTime(t.due_at, ctx.tz) : 'sem prazo'}`,
-  ].join('\n');
+  return factLines(t, formatOf(ctx)).join('\n');
+}
+
+export function formatOf(ctx: ReplyContext): MessageFormat {
+  return { tz: ctx.tz, memberName: (id) => who(ctx, id) };
 }
 
 export function listReply(ctx: ReplyContext, header: string, tasks: Task[], more: boolean): string {
@@ -133,8 +134,8 @@ export function describeOption(ctx: ReplyContext, intent: Intent): string {
 export function unknownReply(ctx: ReplyContext, options: Intent[]): string {
   const head =
     ctx.intensity === 'full'
-      ? 'Miau? Não tenho certeza do que você quis dizer. Foi algo assim?'
-      : 'Não tenho certeza do que você quis dizer. Foi algo assim?';
+      ? 'Miau? Não entendi bem e ainda não fiz nada. Foi algo assim?'
+      : 'Não entendi bem e ainda não fiz nada. Foi algo assim?';
   const nums = options.map((_, i) => String(i + 1));
   return [
     head,

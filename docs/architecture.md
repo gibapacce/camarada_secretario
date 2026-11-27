@@ -132,9 +132,12 @@ do Supabase; o navegador nunca a recebe.
 - **Fuso:** datas exibidas e digitadas no fuso da casa (`households.timezone`), convertidas para
   UTC antes de enviar. Prazo sem hora vira 23:59 do dia; sem data, a tarefa fica sem prazo.
 - **Ações:** cada clique gera um `Idempotency-Key` novo; os botões ficam desabilitados durante a
-  operação. O aviso mostra o título exato e oferece "Desfazer" (usa `POST /api/undo`). Em erro, o
-  aviso diz que nada foi registrado.
-- **Persona:** rótulos e avisos vêm de `@camarada/persona` (`panelText`, `actionMessage`).
+  operação. O aviso mostra o título exato e o que mudou (ex.: novo prazo) e oferece "Desfazer"
+  (usa `POST /api/undo`) só quando algo mudou. Se o servidor recusou, o aviso diz o motivo e que
+  nada foi alterado; se a resposta não chegou (rede ou 5xx), diz que não conseguiu confirmar,
+  recarrega a tela e pede para conferir antes de repetir (`outcomeUnknown`, em `lib/api.ts`).
+- **Persona:** rótulos e avisos vêm de `@camarada/persona` (`panelText`, `resultMessage`,
+  `failureMessage`), os mesmos usados pelo bot.
   Em `off` os textos são neutros e o mascote some; assuntos sensíveis (saúde, luto, dívidas) usam
   tom neutro em qualquer nível.
 - **Segurança:** `apps/web/public/_headers` define CSP (`connect-src 'self' https://*.supabase.co`,
