@@ -194,15 +194,16 @@ com `npm install-scripts ls` antes de aprovar.
 
 ## Fluxo de trabalho (branches)
 
-**Toda feature nova ou correção de bug é feita em uma branch separada.** O `main` só recebe código
-por merge de uma branch com o CI verde, e representa sempre o que está (ou pode ir) em produção.
+**Toda mudança (funcionalidade, melhoria, correção, documentação ou manutenção) é feita em uma
+branch separada.** O `main` só recebe código por merge de uma branch com o CI verde, e representa
+sempre o que está (ou pode ir) em produção.
 
-| Tipo de mudança        | Prefixo  | Exemplo                        |
-| ---------------------- | -------- | ------------------------------ |
-| Funcionalidade nova    | `feat/`  | `feat/resumo-semanal-telegram` |
-| Correção de bug        | `fix/`   | `fix/lembrete-duplicado`       |
-| Documentação           | `docs/`  | `docs/readme-detalhado`        |
-| Manutenção/ferramentas | `chore/` | `chore/atualizar-wrangler`     |
+| Tipo de mudança         | Prefixo  | Exemplo                        |
+| ----------------------- | -------- | ------------------------------ |
+| Funcionalidade/melhoria | `feat/`  | `feat/resumo-semanal-telegram` |
+| Correção de bug         | `fix/`   | `fix/lembrete-duplicado`       |
+| Documentação            | `docs/`  | `docs/readme-detalhado`        |
+| Manutenção/ferramentas  | `chore/` | `chore/atualizar-wrangler`     |
 
 Passo a passo:
 

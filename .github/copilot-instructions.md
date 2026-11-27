@@ -5,9 +5,9 @@ geral e comandos no [README.md](../README.md).
 
 ## Branches (obrigatório)
 
-- **Nunca faça commit direto no `main`.** Toda feature nova ou correção de bug começa em uma
-  branch própria, criada a partir do `main` atualizado:
-  - `feat/<descricao-curta>` para funcionalidade nova
+- **Nunca faça commit direto no `main`.** Toda mudança (funcionalidade, melhoria, correção,
+  documentação ou manutenção) começa em uma branch própria, criada a partir do `main` atualizado:
+  - `feat/<descricao-curta>` para funcionalidade nova ou melhoria
   - `fix/<descricao-curta>` para correção de bug
   - `docs/<descricao-curta>` para documentação
   - `chore/<descricao-curta>` para manutenção e ferramentas
