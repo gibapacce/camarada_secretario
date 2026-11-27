@@ -233,7 +233,7 @@ Regras:
 - Commits no formato `tipo(escopo): descrição` (ex.: `fix(lembretes): nao repetir atraso`).
 - Se a mudança tiver migration, aplique no Supabase **antes** de publicar o Worker.
 - Publique em produção só a partir do `main`, depois do merge.
-- Ideias e bugs ainda não priorizados ficam no `BACKLOG.MD` (local) ou em issues do GitHub.
+- Ideias e bugs ainda não priorizados ficam no [BACKLOG.md](BACKLOG.md) ou em issues do GitHub.
 
 ## Testes e qualidade
 

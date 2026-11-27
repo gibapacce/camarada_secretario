@@ -12,7 +12,7 @@ geral e comandos no [README.md](../README.md).
   - `docs/<descricao-curta>` para documentação
   - `chore/<descricao-curta>` para manutenção e ferramentas
 - Uma branch por assunto. Se surgir outro bug ou feature no meio do trabalho, anote no
-  `BACKLOG.MD` ou crie outra branch depois; não misture.
+  `BACKLOG.md` ou crie outra branch depois; não misture.
 - Antes de subir: `npm run check` precisa passar.
 - Suba a branch (`git push -u origin <branch>`) e peça para a pessoa abrir o Pull Request para o
   `main`. Não faça merge no `main` nem publique (`npm run deploy -w apps/worker`) sem pedido
